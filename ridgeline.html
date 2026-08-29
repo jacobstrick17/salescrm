@@ -268,6 +268,7 @@
   <div class="auth-card">
     <div class="auth-logo"><div class="mark">R</div>Ridgeline</div>
     <div class="auth-sub" id="authSub">Sign in to your roofing workspace.</div>
+    <div style="font-size:11px;color:#94a3b8;margin:-16px 0 18px">Build 2026-08-29a</div>
     <div class="auth-tabs">
       <button id="tabLogin" class="active" onclick="setAuthMode('login')">Log in</button>
       <button id="tabSignup" onclick="setAuthMode('signup')">Sign up</button>
@@ -322,8 +323,8 @@
    The publishable key below is safe in client code; data is protected
    by Row Level Security policies on the database.
    ==================================================================== */
-const SUPABASE_URL = 'https://fuvwawwuudnosgsvravt.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_MC81YTDBsH-PxSEwii8MaA_1UEGDhyG';
+const SUPABASE_URL = 'https://ydfgllpozihgjuoxulrf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_DnZ8wsW76lp_djiPQp1Xgw_20eS_cNW';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ============================ CONSTANTS ============================ */
@@ -1072,12 +1073,20 @@ async function deleteContact(id){
   showLoading(true);
   try{
     await sb.from('activities').delete().eq('contact_id',id);
+    // Photos live in storage, not in a table, so deleting the deal row is not
+    // enough -- the image files have to go first or they are orphaned there.
+    const goneDeals=state.deals.filter(d=>d.contact_id===id).map(d=>d.id);
+    const gonePaths=state.job_photos.filter(p=>goneDeals.indexOf(p.deal_id)>=0)
+      .map(p=>p.storage_path);
+    if(gonePaths.length){try{await sb.storage.from('job-photos').remove(gonePaths);}catch(_e){}}
     await sb.from('deals').delete().eq('contact_id',id);
     await sb.from('reminders').delete().eq('contact_id',id);
     await dbDelete('contacts',id);
     state.activities=state.activities.filter(x=>x.contact_id!==id);
     state.deals=state.deals.filter(x=>x.contact_id!==id);
     state.reminders=state.reminders.filter(x=>x.contact_id!==id);
+    state.job_photos=state.job_photos.filter(p=>goneDeals.indexOf(p.deal_id)<0);
+    state.roof_measurements=state.roof_measurements.filter(m=>goneDeals.indexOf(m.deal_id)<0);
     state.calls.forEach(k=>{if(k.contact_id===id)k.contact_id=null;});
     state.contacts=state.contacts.filter(x=>x.id!==id);
     closeModal();render();
@@ -2281,8 +2290,12 @@ async function saveInspection(dealId){
 function toggleEstimateSigned(dealId){
   const d=state.deals.find(x=>x.id===dealId);
   if(!d||!d.estimate)return;
-  const estimate={...d.estimate,signed:!d.estimate.signed};
-  dbUpdate('deals',dealId,{estimate}).then(row=>{
+  const signing=!d.estimate.signed;
+  const estimate={...d.estimate,signed:signing};
+  // Signing is the moment the job's value stops being a guess. Without this
+  // the pipeline reports one number and the signed quote says another.
+  const patch=signing?{estimate,value:estimateTotal(estimate)}:{estimate};
+  dbUpdate('deals',dealId,patch).then(row=>{
     const i=state.deals.findIndex(x=>x.id===dealId);if(i>=0)state.deals[i]=row;
     render();
   }).catch(e=>alert('Could not update: '+(e.message||e)));
@@ -2306,7 +2319,7 @@ function openMaterialSelections(dealId){
       <div class="field"><label>Color</label>
         <input type="text" id="ms_color" value="${esc(ms.color||'')}" placeholder="e.g. Weathered Wood"></div>
       <div class="field"><label>Underlayment</label>
-        <select id="ms_under">${opts(['Synthetic','Felt 15#','Felt 30#','Peel &amp; stick','Other'],ms.underlayment||'Synthetic')}</select></div>
+        <select id="ms_under">${opts(['Synthetic','Felt 15#','Felt 30#','Peel & stick','Other'],ms.underlayment||'Synthetic')}</select></div>
     </div>
     <div class="field"><label>Notes</label>
       <textarea id="ms_notes" rows="2">${esc(ms.notes||'')}</textarea></div>
