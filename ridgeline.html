@@ -252,6 +252,17 @@
   .save-hint{font-size:12px;color:var(--green);margin-top:8px;display:none;}
 
   .row-actions{display:flex;gap:2px;justify-content:flex-end;}
+  /* The landing-page bars carry a path on one side and three figures on the
+     other. At full width they sit side by side; on a phone there is not room
+     for both plus a bar, so the row becomes two lines instead of overflowing. */
+  .seo-path{width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .seo-val{width:150px;}
+  @media(max-width:700px){
+    .bar-row:has(.seo-path){flex-wrap:wrap;}
+    .seo-path{width:100%;}
+    .seo-val{width:auto;margin-left:auto;text-align:right;}
+    .bar-row:has(.seo-path) .bar-track{flex:1 1 55%;min-width:0;}
+  }
   @media(max-width:840px){
     .panel-grid{grid-template-columns:1fr;}
     .sidebar{width:64px;}
@@ -268,7 +279,7 @@
   <div class="auth-card">
     <div class="auth-logo"><div class="mark">R</div>Ridgeline</div>
     <div class="auth-sub" id="authSub">Sign in to your roofing workspace.</div>
-    <div style="font-size:11px;color:#94a3b8;margin:-16px 0 18px">Build 2026-08-29a</div>
+    <div style="font-size:11px;color:#94a3b8;margin:-16px 0 18px">Build 2026-08-29b</div>
     <div class="auth-tabs">
       <button id="tabLogin" class="active" onclick="setAuthMode('login')">Log in</button>
       <button id="tabSignup" onclick="setAuthMode('signup')">Sign up</button>
@@ -348,6 +359,9 @@ let currentCompany = null;
 let currentMembership = null;
 let appLoaded = false;
 let authMode = 'login';
+let isPlatformAdmin = false;   // the operator tier, above every company
+let platformData = null;
+let platformDays = 30;
 
 /* ============================ HELPERS ============================ */
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>(
@@ -464,6 +478,12 @@ async function enterApp(){
   document.getElementById('userEmail').textContent=currentUser.email;
   try{ await loadCompany(); await loadAll(); }
   catch(e){ alert('Could not load your data: '+(e.message||e)); }
+  // Cosmetic only: the database refuses platform data to everyone else
+  // regardless of what this flag says.
+  try{
+    const { data } = await sb.rpc('is_platform_admin');
+    isPlatformAdmin = data === true;
+  }catch(e){ isPlatformAdmin = false; }
   showLoading(false);
   buildNav();
   render();
@@ -566,10 +586,16 @@ const NAV=[
   {id:'team',ico:'👥',label:'Team'},
   {id:'settings',ico:'⚙',label:'Settings'},
 ];
+// Appended at render time, only for the operator.
+const PLATFORM_NAV=[
+  {sec:'Platform'},
+  {id:'seo',ico:'◈',label:'SEO Command'},
+];
 function buildNav(){
   const missed=state.calls.filter(c=>c.status==='missed').length;
   const unread=state.notifications.filter(n=>!n.read&&currentUser&&n.user_id===currentUser.id).length;
-  document.getElementById('nav').innerHTML=NAV.map(n=>{
+  const items = isPlatformAdmin ? NAV.concat(PLATFORM_NAV) : NAV;
+  document.getElementById('nav').innerHTML=items.map(n=>{
     if(n.sec)return `<div class="label-sm">${n.sec}</div>`;
     let pill='';
     if(n.id==='calls'&&missed)pill=`<span class="pill">${missed}</span>`;
@@ -593,6 +619,7 @@ function render(){
   else if(currentView==='team')v.innerHTML=viewTeam();
   else if(currentView==='training')v.innerHTML=viewTraining();
   else if(currentView==='settings')v.innerHTML=viewSettings();
+  else if(currentView==='seo')viewPlatformSEO();
 }
 
 /* ============================ DASHBOARD ============================ */
@@ -2734,6 +2761,145 @@ async function removeMember(userId){
     state.members=state.members.filter(x=>x.user_id!==userId);
     render();
   }catch(e){alert('Could not remove teammate: '+(e.message||e));}
+}
+
+/* ==================== PLATFORM — SEO COMMAND ====================
+   Operator-only. Everything here spans all sites and sits outside the
+   multi-tenant boundary entirely. */
+function pctOf(a,b){ return b ? Math.round(a/b*1000)/10 : null; }
+function ago(ts){
+  if(!ts) return 'never';
+  const d = Math.round((Date.now()-new Date(ts))/86400000);
+  return d<=0 ? 'today' : d===1 ? 'yesterday' : d+' days ago';
+}
+
+function viewPlatformSEO(){
+  const v=document.getElementById('view');
+  if(!platformData){
+    v.innerHTML='<div class="view-head"><div><h1>SEO Command</h1>'
+      +'<p>Reading the estate\u2026</p></div></div>';
+    sb.rpc('platform_overview',{p_days:platformDays}).then(({data,error})=>{
+      if(error){
+        v.innerHTML='<div class="view-head"><div><h1>SEO Command</h1></div></div>'
+          +'<div class="panel"><div class="mi-sub">'+esc(error.message)+'</div></div>';
+        return;
+      }
+      platformData=data; renderPlatformSEO();
+    });
+    return;
+  }
+  renderPlatformSEO();
+}
+
+function renderPlatformSEO(){
+  const d=platformData, r=d.reviews||{}, f=d.funnel||{}, p=d.pipeline||{}, hlth=d.data_health||{};
+  const gap=Number(r.gap||0);
+  const pctToTarget = r.target ? Math.min(100, Math.round(r.current/r.target*100)) : 0;
+
+  const landing=(f.by_landing||[]).slice(0,10);
+  const maxSess=Math.max(1,...landing.map(x=>x.sessions||0));
+
+  document.getElementById('view').innerHTML=`
+  <div class="view-head">
+    <div><h1>SEO Command</h1>
+      <p>Every site you run. Only you can open this \u2014 it sits above the company layer.</p></div>
+    <div style="display:flex;gap:8px">
+      ${[7,30,90].map(n=>`<button class="btn ${n===platformDays?'':'secondary'}"
+        onclick="platformDays=${n};platformData=null;viewPlatformSEO()">${n}d</button>`).join('')}
+      <button class="btn secondary" onclick="platformData=null;viewPlatformSEO()">\u21bb</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;border-left:4px solid ${gap>0?'var(--amber)':'var(--green)'}">
+    <h3>The constraint \u2014 Google reviews</h3>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div style="font-size:34px;font-weight:800;color:var(--text)">${r.current==null?'\u2014':r.current}</div>
+      <div style="color:var(--muted);font-size:13px">of ${r.target||'\u2014'} needed for the third map-pack slot
+        ${gap>0?`\u00b7 <strong style="color:var(--amber)">${gap} to go</strong>`:'\u00b7 <strong style="color:var(--green)">target reached</strong>'}
+        \u00b7 last confirmed ${ago(r.as_of)}</div>
+    </div>
+    <div class="prog-track" style="margin-top:10px"><div class="prog-fill" style="width:${pctToTarget}%"></div></div>
+    <div class="mi-sub" style="margin-top:9px">Nothing on the site outranks this. Rankings follow reviews in the
+      local pack, not the other way round \u2014 and the last jump came from asking customers directly,
+      not from anything we changed on the page.</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="label">Sessions</div><div class="value blue">${f.sessions||0}</div>
+      <div class="sub">${f.views||0} page views</div></div>
+    <div class="stat"><div class="label">Leads</div><div class="value">${f.leads||0}</div>
+      <div class="sub">${pctOf(f.leads||0,f.sessions||0)==null?'\u2014':pctOf(f.leads||0,f.sessions||0)+'% of sessions'}</div></div>
+    <div class="stat"><div class="label">Inspections booked</div><div class="value amber">${f.booked||0}</div>
+      <div class="sub">${pctOf(f.booked||0,f.leads||0)==null?'\u2014':pctOf(f.booked||0,f.leads||0)+'% of leads'}</div></div>
+    <div class="stat"><div class="label">Sold</div><div class="value green">${money(f.sold_value||0)}</div>
+      <div class="sub">${f.sold||0} job${(f.sold||0)===1?'':'s'}</div></div>
+    <div class="stat"><div class="label">Open pipeline</div><div class="value">${money(p.open_value||0)}</div>
+      <div class="sub">${p.open_deals||0} still winnable</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px">
+    <h3>What the traffic is worth <span class="count">by landing page</span></h3>
+    ${landing.length?landing.map(x=>`
+      <div class="bar-row">
+        <div class="bl seo-path" title="${esc(x.path)}">${esc(x.path)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(x.sessions/maxSess*100)}%"></div></div>
+        <div class="bv seo-val">${x.sessions} sess \u00b7 ${x.leads} lead${x.leads===1?'':'s'}${Number(x.value)?' \u00b7 '+money(x.value):''}</div>
+      </div>`).join('')
+      :'<div class="mi-sub">No sessions in this window yet. Once the site is repointed this fills in on its own.</div>'}
+    <div class="mi-sub" style="margin-top:10px">Sessions are attributed to the FIRST page of the visit, not the page
+      someone happened to convert on \u2014 the contact page never earned a lead, the page that brought them did.</div>
+  </div>
+
+  <div class="panel-grid">
+    <div class="panel">
+      <h3>Sites <span class="count">${(d.sites||[]).length}</span></h3>
+      ${(d.sites||[]).map(s=>`<div class="mini-item">
+        <div class="mi-top"><span><strong>${esc(s.name)}</strong></span>
+          ${s.wired?'<span class="badge b-green">wired to CRM</span>'
+                   :'<span class="badge b-gray">not wired</span>'}</div>
+        <div class="mi-sub">${esc((s.domain||'').replace(/^https?:\/\//,''))}
+          \u00b7 ${s.views||0} views \u00b7 ${s.leads||0} leads</div>
+        <div class="mi-sub">${s.last_run
+          ? 'audited '+ago(s.last_run.at)+' \u00b7 '+(s.last_run.pages||'?')+' pages'
+            +(s.last_run.score?' \u00b7 score '+s.last_run.score:'')
+          : 'never audited'}${s.open_findings?` \u00b7 <strong style="color:var(--amber)">${s.open_findings} open issue${s.open_findings===1?'':'s'}</strong>`:''}</div>
+      </div>`).join('')}
+    </div>
+
+    <div class="panel">
+      <h3>Tracked keywords <span class="count">${(d.keywords||[]).length}</span></h3>
+      ${(d.keywords||[]).length?(d.keywords||[]).map(k=>`<div class="mini-item">
+        <div class="mi-top"><span>${esc(k.keyword)}</span>
+          <span class="badge ${k.position?(k.position<=3?'b-green':k.position<=10?'b-amber':'b-gray'):'b-gray'}">
+            ${k.position?('#'+k.position):'unranked'}</span></div>
+        <div class="mi-sub">${k.volume?k.volume.toLocaleString()+'/mo':'volume unknown'}
+          ${k.target_url?' \u00b7 targets '+esc(k.target_url):''}
+          ${k.checked?' \u00b7 checked '+ago(k.checked):' \u00b7 never checked'}</div>
+      </div>`).join('')
+      :'<div class="mi-sub">No keywords tracked yet.</div>'}
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Open findings <span class="count">${(d.findings||[]).length}</span></h3>
+      ${(d.findings||[]).length?(d.findings||[]).map(x=>`<div class="mini-item">
+        <div class="mi-top"><span><strong>${esc(x.title)}</strong></span>
+          <span class="badge ${x.severity==='high'?'b-red':x.severity==='medium'?'b-amber':'b-gray'}">${esc(x.severity)}</span></div>
+        <div class="mi-sub">${esc(x.site)} \u00b7 ${esc(x.category)}${x.url?' \u00b7 '+esc(x.url.replace(/^https?:\/\/[^/]+/,'')):''}</div>
+        ${x.detail?`<div class="mi-sub" style="margin-top:4px">${esc(x.detail)}</div>`:''}
+      </div>`).join('')
+      :'<div class="empty" style="padding:24px"><div class="big">\u2713</div>Nothing open across any site.</div>'}
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Data health</h3>
+      <div class="ck-row"><span class="ck-mark ${hlth.undialable_leads?'todo':'done'}">${hlth.undialable_leads?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.undialable_leads||0} lead${(hlth.undialable_leads||0)===1?'':'s'} with an undialable phone number</span></div>
+      <div class="ck-row"><span class="ck-mark ${hlth.leads_without_session?'todo':'done'}">${hlth.leads_without_session?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.leads_without_session||0} lead${(hlth.leads_without_session||0)===1?'':'s'} that cannot be traced to a page</span></div>
+      <div class="ck-row"><span class="ck-mark done">\u2713</span>
+        <span class="ck-label">${hlth.intake_keys_live||0} intake key${(hlth.intake_keys_live||0)===1?'':'s'} live</span></div>
+    </div>
+  </div>`;
 }
 
 /* ============================ EXPORT ============================ */
