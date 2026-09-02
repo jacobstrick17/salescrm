@@ -301,6 +301,19 @@
   .seo-path{width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   /* Search Console. Its four headline numbers are read together and compared
      day to day, so they get tabular figures and a shared baseline. */
+  /* Stale-build banner. Fixed to the top so it is visible on the auth screen
+     as well as inside the app — a stale deploy is worth knowing about before
+     you start reading numbers off it, not after. */
+  .build-warn{position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:var(--amber);color:#151a21;font-size:12.5px;font-weight:600;
+    padding:9px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    box-shadow:0 2px 10px rgba(0,0,0,.35);}
+  .build-warn .bw-msg{flex:1;min-width:220px;font-weight:500;}
+  .build-warn strong{font-weight:700;}
+  .build-warn button{background:#151a21;color:#fff;border:0;border-radius:6px;
+    padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;}
+  .build-warn button.ghost{background:transparent;color:#151a21;
+    border:1px solid rgba(21,26,33,.35);}
   .gsc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:12px;margin-bottom:14px;}
   .gsc-cell{border:1px solid var(--border);border-radius:9px;padding:11px 12px;}
   .gsc-cell .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
@@ -360,7 +373,7 @@
   <div class="auth-card">
     <div class="auth-logo"><div class="mark">R</div>Ridgeline</div>
     <div class="auth-sub" id="authSub">Sign in to your roofing workspace.</div>
-    <div style="font-size:11px;color:var(--muted);margin:-16px 0 18px">Build 2026-08-29e</div>
+    <div style="font-size:11px;color:var(--muted);margin:-16px 0 18px" id="buildStamp"></div>
     <div class="auth-tabs">
       <button id="tabLogin" class="active" onclick="setAuthMode('login')">Log in</button>
       <button id="tabSignup" onclick="setAuthMode('signup')">Sign up</button>
@@ -418,6 +431,58 @@
 const SUPABASE_URL = 'https://ydfgllpozihgjuoxulrf.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_DnZ8wsW76lp_djiPQp1Xgw_20eS_cNW';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ---------------------------------------------------------------------------
+   BUILD — the single source of truth for what this file is.
+   Bump it here and nowhere else, then record the same string in app_release:
+     insert into public.app_release (build, notes) values ('...', '...');
+   The database row is what the deploy is checked against, so a bump without
+   the insert makes the app look newer than expected rather than older, which
+   the banner reports differently and on purpose.
+--------------------------------------------------------------------------- */
+const BUILD = '2026-08-29e';
+
+function renderBuildStamp(){
+  const el = document.getElementById('buildStamp');
+  if(el) el.textContent = 'Build ' + BUILD;
+}
+renderBuildStamp();
+
+/* Compare what is running against what should be. Fails OPEN: any error, and
+   no banner. A version check that interrupts the app when it cannot reach the
+   database is worse than the staleness it guards against. */
+async function checkBuild(){
+  let expected;
+  try{
+    const { data, error } = await sb.rpc('current_build');
+    if(error || !data) return;
+    expected = String(data);
+  }catch(e){ return; }
+  if(expected === BUILD) return;
+
+  const old = document.querySelector('.build-warn');
+  if(old) old.remove();
+  const bar = document.createElement('div');
+  bar.className = 'build-warn';
+
+  /* Ahead of the database means someone deployed without recording the
+     release. That is a bookkeeping slip, not a stale page, and telling the
+     reader to reload would send them chasing nothing. */
+  const ahead = BUILD > expected;
+  bar.innerHTML = ahead
+    ? `<span class="bw-msg">This page is build <strong>${BUILD}</strong> but the
+         latest recorded release is <strong>${expected}</strong>. The deploy is
+         fine — the release just was not written down.</span>
+       <button class="ghost" onclick="this.parentNode.remove()">Dismiss</button>`
+    : `<span class="bw-msg">You are looking at build <strong>${BUILD}</strong>.
+         The current release is <strong>${expected}</strong>, so these numbers
+         may be out of date. Reload first — if the build does not change,
+         the deploy is stale and the file has not reached the host.</span>
+       <button onclick="location.reload(true)">Reload</button>
+       <button class="ghost" onclick="this.parentNode.remove()">Dismiss</button>`;
+  document.body.appendChild(bar);
+  document.body.style.paddingTop = bar.offsetHeight + 'px';
+}
 
 /* ============================ CONSTANTS ============================ */
 const STAGES = ['New Lead','Contacted','Inspection Scheduled','Quote Sent','Won','Build','Completed','Lost'];
@@ -557,6 +622,7 @@ async function enterApp(){
   document.getElementById('onboardScreen').style.display='none';
   document.getElementById('appRoot').style.display='flex';
   document.getElementById('userEmail').textContent=currentUser.email;
+  checkBuild();
   try{ await loadCompany(); await loadAll(); }
   catch(e){ alert('Could not load your data: '+(e.message||e)); }
   // Cosmetic only: the database refuses platform data to everyone else
