@@ -1,0 +1,3036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ridgeline</title>
+<style>
+  :root{
+    --bg:#060a11; --sidebar:rgba(8,14,25,.92); --sidebar-2:rgba(56,189,248,.10);
+    --primary:#38bdf8; --primary-dark:#0ea5e9;
+    --text:#e9f1fb; --muted:#8ba3c2; --border:rgba(120,170,235,.14);
+    --border-hi:rgba(125,190,255,.34);
+    --card:rgba(17,27,44,.72); --card-solid:#111b2c;
+    --green:#34d399; --red:#f87171; --amber:#fbbf24;
+    --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 10px 30px rgba(0,0,0,.45);
+    --glow:0 0 0 1px rgba(56,189,248,.18), 0 0 28px rgba(56,189,248,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;}
+  /* Two cold light sources and a faint grid. Fixed, so it reads as a surface
+     the content sits on rather than something that scrolls with it. */
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(1100px 620px at 12% -12%, rgba(56,189,248,.13), transparent 62%),
+      radial-gradient(900px 520px at 108% 4%, rgba(129,140,248,.10), transparent 58%),
+      linear-gradient(180deg,#0a1523 0%, #060a11 46%);}
+  body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+    background-image:linear-gradient(rgba(120,170,235,.05) 1px, transparent 1px),
+                     linear-gradient(90deg, rgba(120,170,235,.05) 1px, transparent 1px);
+    background-size:52px 52px;
+    mask-image:radial-gradient(1000px 700px at 30% 0%, #000 30%, transparent 78%);}
+  /* Figures line up column to column. On a dashboard that is not decoration. */
+  .value,.bv,.stat .value,.est-sum-row,.totals{font-variant-numeric:tabular-nums;}
+  .app{display:flex;min-height:100vh;}
+
+  .splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;background:#060a11;z-index:100;color:var(--muted);}
+  .spinner{width:38px;height:38px;border:4px solid rgba(56,189,248,.18);border-top-color:var(--primary);
+    border-radius:50%;animation:spin .9s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .auth-wrap{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:
+       radial-gradient(900px 500px at 20% 0%, rgba(56,189,248,.16), transparent 60%),
+       linear-gradient(160deg,#0b1727,#05080f);padding:20px;z-index:90;}
+  .auth-card{background:rgba(16,26,42,.86);border:1px solid var(--border-hi);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border-radius:16px;width:100%;max-width:400px;padding:32px;
+    box-shadow:0 20px 50px rgba(0,0,0,.4);}
+  .auth-logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;}
+  .auth-logo .mark{width:34px;height:34px;border-radius:8px;background:var(--primary);color:#fff;
+    display:flex;align-items:center;justify-content:center;}
+  .auth-sub{color:var(--muted);font-size:13px;margin:6px 0 22px;}
+  .auth-tabs{display:flex;gap:6px;margin-bottom:20px;background:rgba(255,255,255,.05);padding:4px;border-radius:9px;}
+  .auth-tabs button{flex:1;padding:8px;border:none;background:none;border-radius:7px;cursor:pointer;
+    font-weight:600;font-size:13px;color:var(--muted);}
+  .auth-tabs button.active{background:rgba(56,189,248,.18);color:#eaf7ff;box-shadow:none;}
+  .auth-field{margin-bottom:14px;}
+  .auth-field label{display:block;font-size:12px;font-weight:600;margin-bottom:5px;}
+  .auth-btn{width:100%;background:linear-gradient(180deg,#4cc5fb,#0ea5e9);color:#04121d;border:none;padding:11px;border-radius:9px;
+    font-weight:700;cursor:pointer;font-size:14px;}
+  .auth-btn:hover{background:var(--primary-dark);}
+  .auth-btn:disabled{opacity:.6;cursor:default;}
+  .auth-err{color:var(--red);font-size:12.5px;margin-top:12px;min-height:16px;}
+  .auth-msg{color:var(--green);font-size:12.5px;margin-top:8px;}
+
+  .loading{position:fixed;inset:0;background:rgba(3,7,14,.6);backdrop-filter:blur(2px);display:none;
+    align-items:center;justify-content:center;z-index:80;}
+  .loading.show{display:flex;}
+
+  .sidebar{width:230px;background:var(--sidebar);color:var(--text);display:flex;flex-direction:column;
+    position:fixed;top:0;bottom:0;left:0;border-right:1px solid var(--border);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);}
+  .logo{padding:16px 20px;font-size:18px;font-weight:700;color:#fff;letter-spacing:.3px;text-shadow:0 0 18px rgba(56,189,248,.35);
+    display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border);}
+  .logo .mark{width:30px;height:30px;border-radius:7px;background:var(--primary);
+    display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .nav{flex:1;padding:14px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;}
+  .nav a{display:flex;align-items:center;gap:11px;padding:8px 13px;border-radius:8px;
+    color:#b6c8e0;text-decoration:none;font-weight:500;cursor:pointer;transition:.12s;}
+  .nav a:hover{background:var(--sidebar-2);color:#fff;}
+  .nav a.active{background:linear-gradient(90deg,rgba(56,189,248,.22),rgba(56,189,248,.06));
+    color:#eaf7ff;box-shadow:inset 2px 0 0 var(--primary);}
+  .nav a .ico{width:18px;text-align:center;font-size:15px;}
+  .nav a .pill{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;
+    border-radius:10px;padding:1px 7px;}
+  .nav .label-sm{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#6d86a8;
+    padding:10px 13px 4px;font-weight:700;}
+  .user-box{padding:12px;border-top:1px solid var(--border);}
+  .user-box .em{color:var(--text);font-weight:600;font-size:12px;word-break:break-all;margin-bottom:9px;
+    display:flex;align-items:center;gap:7px;}
+  .user-box .em .dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+  .user-box button{width:100%;background:rgba(255,255,255,.05);color:#b6c8e0;border:1px solid var(--border);
+    padding:8px;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:500;margin-top:5px;}
+  .user-box button:hover{background:rgba(56,189,248,.14);color:#fff;border-color:var(--border-hi);}
+
+  .main{margin-left:230px;flex:1;padding:26px 32px 60px;width:calc(100% - 230px);}
+  .view-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;
+    flex-wrap:wrap;gap:14px;}
+  .view-head h1{font-size:23px;font-weight:700;}
+  .view-head p{color:var(--muted);font-size:13px;margin-top:2px;}
+
+  .btn{background:linear-gradient(180deg,#4cc5fb,#0ea5e9);color:#04121d;border:none;padding:9px 16px;border-radius:8px;
+    box-shadow:0 0 18px rgba(56,189,248,.22);
+    font-weight:600;cursor:pointer;font-size:13px;transition:.12s;}
+  .btn:hover{background:var(--primary-dark);}
+  .btn.secondary{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);box-shadow:none;}
+  .btn.secondary:hover{background:rgba(56,189,248,.12);border-color:var(--border-hi);}
+  .btn.danger{background:var(--red);}
+  .btn.danger{color:#1a0505;}
+  .btn.danger:hover{filter:brightness(1.1);}
+  .btn.sm{padding:6px 11px;font-size:12px;}
+  .icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;
+    padding:4px 6px;border-radius:6px;}
+  .icon-btn:hover{background:rgba(255,255,255,.07);color:var(--text);}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px;}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;
+    box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    position:relative;overflow:hidden;transition:border-color .15s,transform .15s;}
+  /* A hairline of light along the top edge, brighter on the one you point at. */
+  .stat::after{content:"";position:absolute;top:0;left:14px;right:14px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(125,190,255,.45),transparent);opacity:.6;}
+  .stat:hover{border-color:var(--border-hi);transform:translateY(-1px);}
+  .stat .label{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+  .stat .value{font-size:26px;font-weight:700;margin-top:6px;}
+  .stat .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .stat .value.green{color:var(--green);} .stat .value.red{color:var(--red);}
+  .stat .value.blue{color:var(--primary);} .stat .value.amber{color:var(--amber);}
+
+  .panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);
+    padding:18px 20px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+  .panel h3{font-size:15px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+  .panel h3 .count{font-size:12px;color:var(--muted);font-weight:500;}
+
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+    padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;}
+  td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(56,189,248,.06);}
+  .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);overflow:hidden;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+  .name-link{color:var(--primary);font-weight:600;cursor:pointer;}
+  .name-link:hover{text-decoration:underline;}
+  tr.missed td{background:rgba(248,113,113,.10);}
+
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge{border:1px solid transparent;}
+  .b-lead{background:rgba(56,189,248,.15);color:#7dd3fc;border-color:rgba(56,189,248,.30);}
+  .b-customer{background:rgba(52,211,153,.15);color:#6ee7b7;border-color:rgba(52,211,153,.30);}
+  .b-gray{background:rgba(139,163,194,.13);color:#a9bdd8;border-color:rgba(139,163,194,.24);}
+  .b-green{background:rgba(52,211,153,.15);color:#6ee7b7;border-color:rgba(52,211,153,.30);}
+  .b-amber{background:rgba(251,191,36,.15);color:#fcd34d;border-color:rgba(251,191,36,.30);}
+  .b-red{background:rgba(248,113,113,.15);color:#fca5a5;border-color:rgba(248,113,113,.30);}
+
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+  input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],
+  input[type=password],select,textarea{font-family:inherit;font-size:13px;padding:8px 11px;
+    border:1px solid var(--border);border-radius:8px;background:rgba(6,12,22,.6);color:var(--text);width:100%;}
+  input:focus,select:focus,textarea:focus{outline:2px solid rgba(56,189,248,.45);border-color:var(--primary);}
+  .search{max-width:280px;} .filter{max-width:180px;}
+
+  .kanban{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;}
+  .col{min-width:236px;width:236px;flex-shrink:0;background:rgba(10,18,32,.55);border-radius:11px;padding:10px;
+    border:1px solid var(--border);}
+  .col-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:2px 4px;}
+  .col-head .ct{font-weight:700;font-size:13px;}
+  .col-head .sum{font-size:11px;color:var(--muted);font-weight:600;}
+  .col.drag-over{outline:2px dashed var(--primary);outline-offset:-3px;}
+  .deal{background:var(--card-solid);border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px;
+    cursor:grab;box-shadow:var(--shadow);transition:border-color .15s;}
+  .deal:hover{border-color:var(--border-hi);}
+  .deal:active{cursor:grabbing;}
+  .deal .dt{font-weight:600;font-size:13px;margin-bottom:3px;}
+  .deal .dc{font-size:12px;color:var(--muted);}
+  .deal .dmini{font-size:11px;color:var(--muted);margin-top:3px;}
+  .deal .dv{font-weight:700;color:var(--green);font-size:13px;margin-top:6px;}
+  .deal .dmeta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
+  .deal .dmeta small{color:var(--muted);font-size:11px;}
+  .col-stripe{height:3px;border-radius:3px;margin-bottom:9px;}
+
+  .ai-action{background:rgba(56,189,248,.10);border-left:3px solid var(--primary);padding:6px 9px;
+    border-radius:0 6px 6px 0;font-size:11.5px;color:var(--primary-dark);margin-top:8px;}
+  .ai-action .lbl{font-weight:700;text-transform:uppercase;font-size:8.5px;letter-spacing:.6px;
+    display:block;opacity:.8;}
+  .ai-action{color:#9fd8f7;}
+  .rev-done{margin-top:8px;font-size:11.5px;font-weight:700;color:#5eead4;}
+  .ck-row{display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .ck-row:last-child{border-bottom:none;}
+  .ck-mark{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;flex-shrink:0;}
+  .ck-mark.done{background:rgba(52,211,153,.16);color:#6ee7b7;}
+  .ck-mark.todo{background:rgba(251,191,36,.16);color:#fcd34d;}
+  .ck-mark.soon{background:rgba(139,163,194,.12);color:#7b90ad;}
+  .ck-label.pending{color:var(--muted);}
+  .ws-back{font-size:12px;color:var(--muted);cursor:pointer;margin-bottom:4px;display:inline-block;}
+  .ws-back:hover{color:var(--primary);}
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:10px;margin-top:6px;}
+  .photo-tile{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;
+    border:1px solid var(--border);background:rgba(255,255,255,.04);}
+  .photo-tile img{width:100%;height:100%;object-fit:cover;cursor:pointer;display:block;}
+  .photo-loading{display:flex;align-items:center;justify-content:center;height:100%;
+    font-size:11px;color:var(--muted);}
+  .photo-del{position:absolute;top:4px;right:4px;background:rgba(15,23,42,.7);color:#fff;border:none;
+    width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;}
+  .photo-del:hover{background:var(--red);}
+  .photo-add{aspect-ratio:1;border:2px dashed var(--border);border-radius:8px;display:flex;
+    align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:11.5px;
+    font-weight:600;text-align:center;line-height:1.3;}
+  .photo-add:hover{border-color:var(--primary);color:var(--primary);background:rgba(56,189,248,.08);}
+  .est-sum-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;}
+  .est-sum-row.total{border-top:2px solid var(--border);margin-top:5px;padding-top:9px;
+    font-weight:700;font-size:15px;color:var(--text);}
+
+  .overlay{position:fixed;inset:0;background:rgba(3,7,14,.72);backdrop-filter:blur(3px);display:none;
+    align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow-y:auto;}
+  .overlay.open{display:flex;}
+  .modal{background:#0e1726;border:1px solid var(--border-hi);border-radius:14px;width:100%;max-width:560px;
+    box-shadow:0 24px 70px rgba(0,0,0,.65), var(--glow);}
+  .modal.wide{max-width:720px;}
+  .modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;
+    justify-content:space-between;align-items:center;}
+  .modal-head h2{font-size:17px;}
+  .modal-body{padding:20px 22px;}
+  .modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;
+    justify-content:flex-end;gap:10px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;font-weight:600;color:#b6c8e0;margin-bottom:5px;}
+  .field-row{display:flex;gap:12px;}
+  .field-row .field{flex:1;}
+
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin-bottom:8px;}
+  .detail-grid .dl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;}
+  .detail-grid .dv{font-size:13px;margin-top:1px;}
+  .sub-section{margin-top:18px;}
+  .sub-section h4{font-size:13px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+  .mini-item{padding:8px 11px;border:1px solid var(--border);border-radius:8px;margin-bottom:7px;font-size:12.5px;}
+  .mini-item .mi-top{display:flex;justify-content:space-between;gap:10px;}
+  .mini-item .mi-sub{color:var(--muted);font-size:11.5px;margin-top:2px;}
+
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:12.5px;}
+  .bar-row .bl{width:118px;flex-shrink:0;color:#b6c8e0;font-weight:600;}
+  .bar-track{flex:1;background:rgba(255,255,255,.06);border-radius:6px;height:20px;overflow:hidden;}
+  /* No min-width: at zero the bar should be empty, not a sliver that reads
+     as 'a little'. The figure is printed beside it either way. */
+  .bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#0ea5e9,#7dd3fc);
+    box-shadow:0 0 14px rgba(56,189,248,.35);}
+  .bar-row .bv{width:92px;text-align:right;flex-shrink:0;color:var(--muted);font-weight:600;}
+
+  .empty{text-align:center;padding:48px 20px;color:var(--muted);}
+  .empty .big{font-size:34px;margin-bottom:10px;}
+  .welcome{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:40px 32px;text-align:center;}
+  .welcome h2{font-size:20px;margin-bottom:8px;}
+  .welcome p{color:var(--muted);max-width:480px;margin:0 auto 20px;}
+  .welcome .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+
+  .train-progress{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px;}
+  .prog-track{background:rgba(255,255,255,.06);border-radius:8px;height:14px;overflow:hidden;margin-top:8px;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,#0ea5e9,#7dd3fc);border-radius:8px;transition:.3s;
+    box-shadow:0 0 16px rgba(56,189,248,.4);}
+  .module{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);margin-bottom:13px;overflow:hidden;}
+  .module-head{padding:15px 18px;cursor:pointer;display:flex;align-items:center;gap:13px;}
+  .module-head:hover{background:rgba(56,189,248,.06);}
+  .module-num{width:34px;height:34px;border-radius:9px;background:rgba(56,189,248,.16);color:#7dd3fc;
+    display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+  .module-head .mh-title{flex:1;font-weight:700;font-size:14.5px;}
+  .module-head .mh-meta{font-size:12px;color:var(--muted);}
+  .module-head .chev{color:var(--muted);transition:.2s;}
+  .module.open .chev{transform:rotate(90deg);}
+  .lessons{display:none;border-top:1px solid var(--border);}
+  .module.open .lessons{display:block;}
+  .lesson{padding:14px 18px 14px 20px;border-bottom:1px solid var(--border);display:flex;gap:13px;}
+  .lesson:last-child{border-bottom:none;}
+  .lesson .lcheck input{width:18px;height:18px;cursor:pointer;margin-top:2px;}
+  .lesson-body{flex:1;}
+  .lesson-body .lt{font-weight:600;font-size:13.5px;margin-bottom:4px;}
+  .lesson-body .lt.done{text-decoration:line-through;color:var(--muted);}
+  .lesson-body .lc{font-size:13px;color:#c3d3e8;}
+  .lesson-body .lk{font-size:12.5px;color:#9fd8f7;background:rgba(56,189,248,.10);
+    border-left:3px solid var(--primary);padding:7px 11px;border-radius:0 6px 6px 0;margin-top:8px;}
+  .note-box{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:18px 20px;margin-top:20px;}
+  .note-box h3{font-size:15px;margin-bottom:10px;}
+  .note-box textarea{min-height:120px;resize:vertical;}
+  .save-hint{font-size:12px;color:var(--green);margin-top:8px;display:none;}
+
+  .row-actions{display:flex;gap:2px;justify-content:flex-end;}
+  /* The landing-page bars carry a path on one side and three figures on the
+     other. At full width they sit side by side; on a phone there is not room
+     for both plus a bar, so the row becomes two lines instead of overflowing. */
+  .seo-path{width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .seo-val{width:186px;font-size:12px;}
+  @media(max-width:700px){
+    .bar-row:has(.seo-path){flex-wrap:wrap;}
+    .seo-path{width:100%;}
+    .seo-val{width:auto;margin-left:auto;text-align:right;}
+    .bar-row:has(.seo-path) .bar-track{flex:1 1 55%;min-width:0;}
+  }
+  @media(max-width:840px){
+    .panel-grid{grid-template-columns:1fr;}
+    .sidebar{width:64px;}
+    .logo span.txt,.nav a span.txt,.nav .label-sm,.user-box .em span.txt{display:none;}
+    .main{margin-left:64px;width:calc(100% - 64px);padding:20px 14px 50px;}
+
+    /* Everything below fixes a 64px rail that was being asked to hold
+       full-width labelled buttons. */
+    .logo{padding:14px 0;justify-content:center;}
+    .nav{padding:10px 6px;}
+    .nav a{justify-content:center;padding:11px 0;}
+    .nav a .ico{width:auto;font-size:17px;}
+    /* The unread count was landing outside the rail entirely. */
+    .nav a{position:relative;}
+    .nav a .pill{position:absolute;top:3px;right:6px;margin:0;padding:0 5px;font-size:9px;line-height:15px;}
+    .user-box{padding:8px 6px;}
+    .user-box .em{justify-content:center;margin-bottom:6px;}
+    /* Icon only. The words did not fit and were wrapping over the edge. */
+    .user-box button{font-size:0;padding:9px 0;min-height:38px;}
+    .user-box button::first-letter{font-size:15px;}
+
+    /* Two figures side by side reads far better than one tall column. */
+    .stat-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+    .stat{padding:13px 14px;}
+    .stat .value{font-size:22px;}
+    .stat .label{font-size:10.5px;letter-spacing:.4px;}
+    .view-head h1{font-size:20px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash"><div class="spinner"></div><div>Starting Ridgeline…</div></div>
+
+<div class="auth-wrap" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo"><div class="mark">R</div>Ridgeline</div>
+    <div class="auth-sub" id="authSub">Sign in to your roofing workspace.</div>
+    <div style="font-size:11px;color:var(--muted);margin:-16px 0 18px">Build 2026-08-29d</div>
+    <div class="auth-tabs">
+      <button id="tabLogin" class="active" onclick="setAuthMode('login')">Log in</button>
+      <button id="tabSignup" onclick="setAuthMode('signup')">Sign up</button>
+    </div>
+    <div class="auth-field"><label>Email</label>
+      <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="auth-field"><label>Password</label>
+      <input type="password" id="authPass" autocomplete="current-password"
+        placeholder="At least 6 characters" onkeydown="if(event.key==='Enter')submitAuth()"></div>
+    <button class="auth-btn" id="authBtn" onclick="submitAuth()">Log in</button>
+    <div class="auth-err" id="authErr"></div>
+    <div class="auth-msg" id="authMsg"></div>
+  </div>
+</div>
+
+<div class="auth-wrap" id="onboardScreen">
+  <div class="auth-card">
+    <div class="auth-logo"><div class="mark">R</div>Ridgeline</div>
+    <div class="auth-sub">Welcome aboard. Name your company to set up your workspace.</div>
+    <div class="auth-field"><label>Company name</label>
+      <input type="text" id="onboardName" placeholder="e.g. Summit Exteriors"
+        onkeydown="if(event.key==='Enter')submitOnboard()"></div>
+    <button class="auth-btn" id="onboardBtn" onclick="submitOnboard()">Create my workspace</button>
+    <div class="auth-err" id="onboardErr"></div>
+    <div class="auth-sub" style="margin:14px 0 0">You'll be the owner — you can invite your team once you're in.</div>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none">
+  <aside class="sidebar">
+    <div class="logo"><div class="mark">R</div><span class="txt">Ridgeline</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="user-box">
+      <div class="em"><span class="dot"></span><span class="txt" id="userEmail"></span></div>
+      <button onclick="refreshData()">↻ Refresh from cloud</button>
+      <button onclick="exportData()">⬇ Export backup</button>
+      <button onclick="signOut()">⎋ Sign out</button>
+    </div>
+  </aside>
+  <main class="main" id="view"></main>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="loading" id="loadingOverlay"><div class="spinner"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ====================================================================
+   RIDGELINE — AI-first CRM for roofing & exterior contractors
+   The publishable key below is safe in client code; data is protected
+   by Row Level Security policies on the database.
+   ==================================================================== */
+const SUPABASE_URL = 'https://ydfgllpozihgjuoxulrf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_DnZ8wsW76lp_djiPQp1Xgw_20eS_cNW';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ============================ CONSTANTS ============================ */
+const STAGES = ['New Lead','Contacted','Inspection Scheduled','Quote Sent','Won','Build','Completed','Lost'];
+const STAGE_COLOR = {'New Lead':'#64748b','Contacted':'#0ea5e9','Inspection Scheduled':'#6366f1',
+  'Quote Sent':'#a855f7','Won':'#16a34a','Build':'#ea580c','Completed':'#0d9488','Lost':'#dc2626'};
+const SERVICE_TYPES = ['Full Roof Replacement','Roof Repair','Roof Inspection','Gutters','Siding','Other'];
+const LEAD_SOURCES = ['Storm / Door-knock','Referral','Google','Facebook','Yard Sign',
+  'Insurance','Repeat Customer','Other'];
+const CONTACT_STATUS = ['New','Working','Nurturing','Active','At Risk','Past Customer'];
+const ACT_ICON = {Call:'📞',Meeting:'🤝',Email:'✉️',Note:'📝'};
+const DEFAULT_TEMPLATE = 'Hi {first_name}, this is {business_name} — thank you for trusting us with '
+  +'your {service_type}. If you have a moment, a quick Google review would really help our small '
+  +'business: {link}. Thank you!';
+
+let state = {contacts:[],deals:[],activities:[],reminders:[],calls:[],review_requests:[],roof_measurements:[],job_photos:[],settings:null,training:{progress:{},notes:''},members:[],invitations:[],notifications:[]};
+let currentView = 'dashboard';
+let currentJobId = null;
+let currentUser = null;
+let currentCompany = null;
+let currentMembership = null;
+let appLoaded = false;
+let authMode = 'login';
+let isPlatformAdmin = false;   // the operator tier, above every company
+let platformData = null;
+let platformDays = 30;
+
+/* ============================ HELPERS ============================ */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>(
+  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function money(n){return '$'+Number(n||0).toLocaleString('en-US');}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function fmtDate(s){if(!s)return '—';const p=String(s).slice(0,10).split('-');
+  if(p.length!==3)return s;
+  const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return m[+p[1]-1]+' '+(+p[2])+', '+p[0];}
+function contact(id){return state.contacts.find(c=>c.id===id);}
+function contactName(id){const c=contact(id);return c?c.name:'—';}
+function daysUntil(s){if(!s)return 9999;
+  const d=new Date(String(s).slice(0,10)+'T00:00:00'),t=new Date(todayStr()+'T00:00:00');
+  return Math.round((d-t)/86400000);}
+function val(id){const e=document.getElementById(id);return e?(e.value||'').trim():'';}
+function opts(arr,sel){return arr.map(o=>`<option ${o===sel?'selected':''}>${esc(o)}</option>`).join('');}
+function showLoading(on){document.getElementById('loadingOverlay').classList.toggle('show',!!on);}
+
+/* ============================ TEAM HELPERS ============================ */
+function isAdmin(){return !!(currentMembership&&(currentMembership.role==='owner'||currentMembership.role==='admin'));}
+function isOwner(){return !!(currentMembership&&currentMembership.role==='owner');}
+function member(uid){return state.members.find(m=>m.user_id===uid)||null;}
+function memberName(uid){const m=member(uid);return m?(m.display_name||m.email||'Teammate'):'Unassigned';}
+function roleLabel(r){return ({owner:'Owner',admin:'Admin',rep:'Rep'})[r]||r;}
+
+/* ============================ AUTH ============================ */
+function setAuthMode(mode){
+  authMode=mode;
+  document.getElementById('tabLogin').classList.toggle('active',mode==='login');
+  document.getElementById('tabSignup').classList.toggle('active',mode==='signup');
+  document.getElementById('authBtn').textContent=mode==='login'?'Log in':'Create account';
+  document.getElementById('authSub').textContent=mode==='login'
+    ?'Sign in to your roofing workspace.'
+    :'Sign-ups are restricted — use an approved or invited email address.';
+  document.getElementById('authErr').textContent='';
+  document.getElementById('authMsg').textContent='';
+  document.getElementById('authPass').setAttribute('autocomplete',
+    mode==='login'?'current-password':'new-password');
+}
+function friendlyAuthError(e){
+  const m=(e&&e.message||'').toLowerCase();
+  if(m.includes('invalid login'))return 'Wrong email or password.';
+  if(m.includes('email not confirmed'))return 'Please confirm your email first — check your inbox for the link.';
+  if(m.includes('already registered')||m.includes('already been registered'))
+    return 'That email already has an account. Switch to "Log in".';
+  if(m.includes('not approved')||m.includes('email_not_allowed')
+    ||m.includes('database error saving new user'))
+    return 'This email is not approved. Ask your administrator to approve it, or have a teammate invite you.';
+  if(m.includes('password'))return e.message;
+  if(m.includes('rate limit'))return 'Too many attempts. Please wait a moment and try again.';
+  return e.message||'Something went wrong. Please try again.';
+}
+async function submitAuth(){
+  const email=val('authEmail');
+  const pass=document.getElementById('authPass').value;
+  const errEl=document.getElementById('authErr');
+  const msgEl=document.getElementById('authMsg');
+  const btn=document.getElementById('authBtn');
+  errEl.textContent='';msgEl.textContent='';
+  if(!email||!pass){errEl.textContent='Enter your email and password.';return;}
+  if(pass.length<6){errEl.textContent='Password must be at least 6 characters.';return;}
+  btn.disabled=true;btn.textContent=authMode==='login'?'Logging in…':'Creating account…';
+  try{
+    if(authMode==='signup'){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error)throw error;
+      if(!data.session){
+        setAuthMode('login');
+        document.getElementById('authMsg').textContent=
+          'Account created. Check '+email+' for a confirmation link, then log in.';
+      }
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error)throw error;
+    }
+  }catch(e){
+    errEl.textContent=friendlyAuthError(e);
+  }finally{
+    btn.disabled=false;
+    btn.textContent=authMode==='login'?'Log in':'Create account';
+  }
+}
+async function signOut(){ await sb.auth.signOut(); }
+function showAuth(){
+  document.getElementById('splash').style.display='none';
+  document.getElementById('appRoot').style.display='none';
+  document.getElementById('authScreen').style.display='flex';
+}
+function showOnboard(){
+  document.getElementById('splash').style.display='none';
+  document.getElementById('authScreen').style.display='none';
+  document.getElementById('appRoot').style.display='none';
+  document.getElementById('onboardScreen').style.display='flex';
+}
+async function enterApp(){
+  document.getElementById('splash').style.display='none';
+  document.getElementById('authScreen').style.display='none';
+  showLoading(true);
+  // Resolve which company this user belongs to (joining a pending invite if any).
+  let companyId=null;
+  try{
+    const {data,error}=await sb.rpc('ensure_membership');
+    if(error)throw error;
+    companyId=data;
+  }catch(e){
+    showLoading(false);
+    alert('Could not set up your account: '+(e.message||e));
+    return;
+  }
+  if(!companyId){ showLoading(false); showOnboard(); return; }
+  document.getElementById('onboardScreen').style.display='none';
+  document.getElementById('appRoot').style.display='flex';
+  document.getElementById('userEmail').textContent=currentUser.email;
+  try{ await loadCompany(); await loadAll(); }
+  catch(e){ alert('Could not load your data: '+(e.message||e)); }
+  // Cosmetic only: the database refuses platform data to everyone else
+  // regardless of what this flag says.
+  try{
+    const { data } = await sb.rpc('is_platform_admin');
+    isPlatformAdmin = data === true;
+  }catch(e){ isPlatformAdmin = false; }
+  showLoading(false);
+  buildNav();
+  render();
+}
+async function submitOnboard(){
+  const name=val('onboardName');
+  const errEl=document.getElementById('onboardErr');
+  const btn=document.getElementById('onboardBtn');
+  errEl.textContent='';
+  if(!name){errEl.textContent='Please enter a company name.';return;}
+  btn.disabled=true;btn.textContent='Creating…';
+  try{
+    const {error}=await sb.rpc('create_company',{p_name:name});
+    if(error)throw error;
+    await enterApp();
+  }catch(e){
+    errEl.textContent=e.message||'Could not create your workspace.';
+  }finally{
+    btn.disabled=false;btn.textContent='Create my workspace';
+  }
+}
+async function loadCompany(){
+  const [co,mem]=await Promise.all([
+    sb.from('companies').select('*').maybeSingle(),
+    sb.from('company_members').select('*').order('created_at',{ascending:true}),
+  ]);
+  if(co.error)throw co.error;
+  if(mem.error)throw mem.error;
+  currentCompany=co.data||null;
+  state.members=mem.data||[];
+  currentMembership=state.members.find(m=>m.user_id===currentUser.id)||null;
+}
+
+/* ============================ DATA LAYER ============================ */
+async function loadAll(){
+  const [c,d,a,r,k,rq,rm,ph,g,t,nt,iv]=await Promise.all([
+    sb.from('contacts').select('*').order('created_at',{ascending:true}),
+    sb.from('deals').select('*').order('created_at',{ascending:true}),
+    sb.from('activities').select('*').order('date',{ascending:false}),
+    sb.from('reminders').select('*').order('due_date',{ascending:true}),
+    sb.from('calls').select('*').order('occurred_at',{ascending:false}),
+    sb.from('review_requests').select('*').order('created_at',{ascending:false}),
+    sb.from('roof_measurements').select('*'),
+    sb.from('job_photos').select('*'),
+    sb.from('account_settings').select('*').maybeSingle(),
+    sb.from('training').select('*').eq('user_id',currentUser.id).maybeSingle(),
+    sb.from('notifications').select('*').order('created_at',{ascending:false}),
+    sb.from('invitations').select('*').eq('status','pending').order('created_at',{ascending:false}),
+  ]);
+  for(const res of [c,d,a,r,k,rq,rm,ph,g,t,nt,iv]){if(res.error)throw res.error;}
+  state.contacts=c.data||[];
+  state.deals=d.data||[];
+  state.activities=a.data||[];
+  state.reminders=r.data||[];
+  state.calls=k.data||[];
+  state.review_requests=rq.data||[];
+  state.roof_measurements=rm.data||[];
+  state.job_photos=ph.data||[];
+  state.settings=g.data||null;
+  state.training=t.data?{progress:t.data.progress||{},notes:t.data.notes||''}:{progress:{},notes:''};
+  state.notifications=nt.data||[];
+  state.invitations=iv.data||[];
+  await reconcileNotifications();
+}
+async function dbInsert(table,row){
+  const {data,error}=await sb.from(table).insert(row).select().single();
+  if(error)throw error;
+  return data;
+}
+async function dbUpdate(table,id,patch){
+  const {data,error}=await sb.from(table).update(patch).eq('id',id).select().single();
+  if(error)throw error;
+  return data;
+}
+async function dbDelete(table,id){
+  const {error}=await sb.from(table).delete().eq('id',id);
+  if(error)throw error;
+}
+async function refreshData(){
+  showLoading(true);
+  try{await loadAll();}catch(e){alert('Refresh failed: '+(e.message||e));}
+  showLoading(false);
+  render();
+}
+
+/* ============================ NAV ============================ */
+const NAV=[
+  {sec:'Workspace'},
+  {id:'dashboard',ico:'◫',label:'Dashboard'},
+  {id:'contacts',ico:'☰',label:'Contacts'},
+  {id:'pipeline',ico:'▥',label:'Job Pipeline'},
+  {id:'calls',ico:'📞',label:'Calls & Messages'},
+  {id:'activities',ico:'✦',label:'Activity Log'},
+  {id:'reminders',ico:'◷',label:'Follow-ups'},
+  {id:'reviews',ico:'⭐',label:'Reviews'},
+  {id:'inbox',ico:'🔔',label:'Notifications'},
+  {sec:'Develop'},
+  {id:'training',ico:'★',label:'Sales Training'},
+  {sec:'Account'},
+  {id:'team',ico:'👥',label:'Team'},
+  {id:'settings',ico:'⚙',label:'Settings'},
+];
+// Appended at render time, only for the operator.
+const PLATFORM_NAV=[
+  {sec:'Platform'},
+  {id:'seo',ico:'◈',label:'SEO Command'},
+];
+function buildNav(){
+  const missed=state.calls.filter(c=>c.status==='missed').length;
+  const unread=state.notifications.filter(n=>!n.read&&currentUser&&n.user_id===currentUser.id).length;
+  const items = isPlatformAdmin ? NAV.concat(PLATFORM_NAV) : NAV;
+  document.getElementById('nav').innerHTML=items.map(n=>{
+    if(n.sec)return `<div class="label-sm">${n.sec}</div>`;
+    let pill='';
+    if(n.id==='calls'&&missed)pill=`<span class="pill">${missed}</span>`;
+    if(n.id==='inbox'&&unread)pill=`<span class="pill">${unread}</span>`;
+    return `<a class="${n.id===currentView?'active':''}" onclick="go('${n.id}')">
+      <span class="ico">${n.ico}</span><span class="txt">${n.label}</span>${pill}</a>`;
+  }).join('');
+}
+function go(view){currentView=view;buildNav();render();window.scrollTo(0,0);}
+function render(){
+  const v=document.getElementById('view');
+  if(currentView==='dashboard')v.innerHTML=viewDashboard();
+  else if(currentView==='jobspace')v.innerHTML=viewJobWorkspace();
+  else if(currentView==='contacts')v.innerHTML=viewContacts();
+  else if(currentView==='pipeline'){v.innerHTML=viewPipeline();wireKanban();}
+  else if(currentView==='calls')v.innerHTML=viewCalls();
+  else if(currentView==='activities')v.innerHTML=viewActivities();
+  else if(currentView==='reminders')v.innerHTML=viewReminders();
+  else if(currentView==='reviews')v.innerHTML=viewReviews();
+  else if(currentView==='inbox')v.innerHTML=viewInbox();
+  else if(currentView==='team')v.innerHTML=viewTeam();
+  else if(currentView==='training')v.innerHTML=viewTraining();
+  else if(currentView==='settings')v.innerHTML=viewSettings();
+  else if(currentView==='seo')viewPlatformSEO();
+}
+
+/* ============================ DASHBOARD ============================ */
+function viewDashboard(){
+  const cs=state.contacts;
+  const isEmpty=!cs.length&&!state.deals.length&&!state.activities.length
+    &&!state.reminders.length&&!state.calls.length;
+  if(isEmpty){
+    return `<div class="view-head"><div><h1>Welcome to Ridgeline</h1>
+      <p>Your roofing workspace is ready.</p></div></div>
+      <div class="welcome">
+        <div style="font-size:40px;margin-bottom:8px">🏠</div>
+        <h2>Let's get your jobs flowing</h2>
+        <p>Add your first contact, or load sample data to see how the dashboard, job pipeline,
+        and call log work for a roofing business. Everything you enter is saved securely to your account.</p>
+        <div class="actions">
+          <button class="btn" onclick="openContactForm()">+ Add your first contact</button>
+          <button class="btn secondary" onclick="loadSample()">Load sample data</button>
+        </div>
+      </div>`;
+  }
+  const leads=cs.filter(c=>c.type==='Lead').length;
+  const customers=cs.filter(c=>c.type==='Customer').length;
+  const openDeals=state.deals.filter(d=>d.stage!=='Won'&&d.stage!=='Build'&&d.stage!=='Completed'&&d.stage!=='Lost');
+  const pipeVal=openDeals.reduce((s,d)=>s+Number(d.value||0),0);
+  const wonVal=state.deals.filter(d=>d.stage==='Won'||d.stage==='Build'||d.stage==='Completed').reduce((s,d)=>s+Number(d.value||0),0);
+  const overdue=state.reminders.filter(r=>!r.done&&daysUntil(r.due_date)<0).length;
+  const openRem=state.reminders.filter(r=>!r.done).length;
+  const missed=state.calls.filter(c=>c.status==='missed').length;
+  const byStage=STAGES.map(st=>{
+    const ds=state.deals.filter(d=>d.stage===st);
+    return {st,count:ds.length,val:ds.reduce((s,d)=>s+Number(d.value||0),0)};
+  });
+  const maxVal=Math.max(1,...byStage.map(b=>b.val));
+  const upcoming=state.reminders.filter(r=>!r.done)
+    .sort((a,b)=>(a.due_date||'').localeCompare(b.due_date||'')).slice(0,5);
+  const recentCalls=[...state.calls]
+    .sort((a,b)=>(b.occurred_at||'').localeCompare(a.occurred_at||'')).slice(0,5);
+  const needsAttention=state.deals.filter(d=>d.stage==='Won'&&!buildReady(d));
+  return `
+  <div class="view-head">
+    <div><h1>Dashboard</h1><p>Your roofing snapshot for ${fmtDate(todayStr())}</p></div>
+    <button class="btn" onclick="openContactForm()">+ New Contact</button>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="label">Contacts</div><div class="value blue">${cs.length}</div>
+      <div class="sub">${leads} leads · ${customers} customers</div></div>
+    <div class="stat"><div class="label">Open Jobs</div><div class="value">${openDeals.length}</div>
+      <div class="sub">in the pipeline</div></div>
+    <div class="stat"><div class="label">Pipeline Value</div><div class="value blue">${money(pipeVal)}</div>
+      <div class="sub">potential revenue</div></div>
+    <div class="stat"><div class="label">Won Revenue</div><div class="value green">${money(wonVal)}</div>
+      <div class="sub">jobs landed</div></div>
+    <div class="stat"><div class="label">Missed Calls</div>
+      <div class="value ${missed?'red':''}">${missed}</div>
+      <div class="sub">${missed?'need a call back':'all caught up'}</div></div>
+    <div class="stat"><div class="label">Open Follow-ups</div><div class="value amber">${openRem}</div>
+      <div class="sub">${overdue} overdue</div></div>
+  </div>
+  <div class="panel-grid">
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Back-Office Check — Sold Jobs Awaiting Build <span class="count">${needsAttention.length}</span></h3>
+      ${needsAttention.length?needsAttention.map(d=>`<div class="mini-item" style="cursor:pointer" onclick="openJobWorkspace('${d.id}')">
+        <div class="mi-top"><span>${esc(d.title)}</span><span class="badge b-red">incomplete</span></div>
+        <div class="mi-sub">${esc(contactName(d.contact_id))} · still needs: ${esc(missingItems(d).join(', '))}</div></div>`).join('')
+        :`<div class="empty"><div class="big">✓</div>Every sold job is build-ready.</div>`}
+    </div>
+    <div class="panel">
+      <h3>Pipeline by Stage</h3>
+      ${byStage.map(b=>`
+        <div class="bar-row">
+          <div class="bl">${b.st}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${b.val/maxVal*100}%;
+            background:${STAGE_COLOR[b.st]}"></div></div>
+          <div class="bv">${b.count} · ${money(b.val)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="panel">
+      <h3>Upcoming Follow-ups <span class="count">${upcoming.length}</span></h3>
+      ${upcoming.length?upcoming.map(r=>{
+        const du=daysUntil(r.due_date);
+        const tag=du<0?`<span class="badge b-red">${-du}d overdue</span>`:
+          du===0?`<span class="badge b-amber">Today</span>`:
+          `<span class="badge b-gray">in ${du}d</span>`;
+        return `<div class="mini-item"><div class="mi-top"><span>${esc(r.title)}</span>${tag}</div>
+          <div class="mi-sub">${r.contact_id?esc(contactName(r.contact_id))+' · ':''}${fmtDate(r.due_date)}</div></div>`;
+      }).join(''):`<div class="empty"><div class="big">✓</div>No pending follow-ups</div>`}
+    </div>
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Recent Calls & Messages <span class="count">${recentCalls.length}</span></h3>
+      ${recentCalls.length?recentCalls.map(c=>{
+        const tag=c.status==='missed'?`<span class="badge b-red">Missed</span>`:
+          `<span class="badge b-gray">${esc(c.status||c.channel)}</span>`;
+        return `<div class="mini-item"><div class="mi-top">
+          <span>${c.channel==='SMS'?'💬':'📞'} ${esc(c.ai_summary||c.transcript||(c.direction+' '+c.channel))}</span>${tag}</div>
+        <div class="mi-sub">${esc(c.contact_id?contactName(c.contact_id):(c.from_number||c.to_number||'Unknown'))} · ${fmtDate(c.occurred_at)}</div></div>`;
+      }).join(''):`<div class="empty"><div class="big">📞</div>No calls logged yet — log one or connect your phone line</div>`}
+    </div>
+  </div>`;
+}
+
+/* ============================ CONTACTS ============================ */
+let contactSearch='',contactFilter='All';
+function viewContacts(){
+  return `
+  <div class="view-head">
+    <div><h1>Contacts</h1><p>${state.contacts.length} total · ${state.contacts.filter(c=>c.type==='Lead').length} leads · ${state.contacts.filter(c=>c.type==='Customer').length} customers</p></div>
+    <button class="btn" onclick="openContactForm()">+ New Contact</button>
+  </div>
+  <div class="toolbar">
+    <input type="text" class="search" placeholder="Search name, address, email…"
+      value="${esc(contactSearch)}" oninput="contactSearch=this.value;refreshContacts()">
+    <select class="filter" onchange="contactFilter=this.value;refreshContacts()">
+      ${['All','Lead','Customer'].map(o=>`<option ${o===contactFilter?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap" id="contactTable">${contactRows(filteredContacts())}</div>`;
+}
+function filteredContacts(){
+  let list=[...state.contacts];
+  if(contactFilter!=='All')list=list.filter(c=>c.type===contactFilter);
+  if(contactSearch){const q=contactSearch.toLowerCase();
+    list=list.filter(c=>((c.name||'')+' '+(c.company||'')+' '+(c.email||'')).toLowerCase().includes(q));}
+  return list.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+}
+function contactRows(list){
+  if(!list.length)return `<div class="empty"><div class="big">☰</div>No contacts match your search.</div>`;
+  return `<table><thead><tr>
+    <th>Name</th><th>Property / Company</th><th>Type</th><th>Status</th><th>Phone</th><th>Source</th><th></th>
+    </tr></thead><tbody>${list.map(c=>`
+    <tr>
+      <td><span class="name-link" onclick="openContactDetail('${c.id}')">${esc(c.name)}</span>
+        ${c.email?`<div class="mi-sub">${esc(c.email)}</div>`:''}</td>
+      <td>${esc(c.company||'—')}</td>
+      <td><span class="badge ${c.type==='Lead'?'b-lead':'b-customer'}">${c.type}</span></td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${esc(c.phone||'—')}</td>
+      <td>${esc(c.source||'—')}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" title="Edit" onclick="openContactForm('${c.id}')">✎</button>
+        <button class="icon-btn" title="Delete" onclick="deleteContact('${c.id}')">🗑</button>
+      </div></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+function statusBadge(s){
+  const map={New:'b-lead',Working:'b-amber',Nurturing:'b-gray',Active:'b-green',
+    'At Risk':'b-red','Past Customer':'b-gray'};
+  return `<span class="badge ${map[s]||'b-gray'}">${esc(s||'—')}</span>`;
+}
+function refreshContacts(){
+  document.getElementById('contactTable').innerHTML=contactRows(filteredContacts());
+}
+
+/* ============================ PIPELINE ============================ */
+function viewPipeline(){
+  const open=state.deals.filter(d=>d.stage!=='Won'&&d.stage!=='Build'&&d.stage!=='Completed'&&d.stage!=='Lost');
+  const total=open.reduce((s,d)=>s+Number(d.value||0),0);
+  return `
+  <div class="view-head">
+    <div><h1>Job Pipeline</h1><p>${open.length} open jobs · ${money(total)} in play · drag cards to move stages</p></div>
+    <button class="btn" onclick="openDealForm()">+ New Job</button>
+  </div>
+  <div class="kanban">${STAGES.map(st=>{
+    const ds=state.deals.filter(d=>d.stage===st);
+    const sum=ds.reduce((s,d)=>s+Number(d.value||0),0);
+    return `<div class="col" data-stage="${esc(st)}">
+      <div class="col-stripe" style="background:${STAGE_COLOR[st]}"></div>
+      <div class="col-head"><span class="ct">${st}</span>
+        <span class="sum">${ds.length} · ${money(sum)}</span></div>
+      ${ds.map(d=>dealCard(d)).join('')||'<div style="font-size:12px;color:var(--muted);padding:6px 4px">No jobs</div>'}
+    </div>`;
+  }).join('')}</div>`;
+}
+function dealCard(d){
+  return `<div class="deal" draggable="true" data-id="${d.id}">
+    <div class="dt" style="cursor:pointer;color:var(--primary)" title="Open job workspace"
+      onclick="openJobWorkspace('${d.id}')">${esc(d.title)}</div>
+    <div class="dc">${esc(contactName(d.contact_id))}</div>
+    ${d.service_type?`<div class="dmini">${esc(d.service_type)}${d.insurance_claim?' · Insurance':''}</div>`:''}
+    <div class="dv">${money(d.value)}</div>
+    ${d.ai_next_action?`<div class="ai-action"><span class="lbl">Next action</span>${esc(d.ai_next_action)}</div>`:''}
+    ${d.stage==='Completed'?reviewCardAction(d):''}
+    <div class="dmeta">
+      <small>Close ${fmtDate(d.expected_close)}</small>
+      <span>
+        <button class="icon-btn" title="Material order" onclick="openMaterialOrder('${d.id}')">📐</button>
+        <button class="icon-btn" title="Edit" onclick="openDealForm('${d.id}')">✎</button>
+        <button class="icon-btn" title="Delete" onclick="deleteDeal('${d.id}')">🗑</button>
+      </span>
+    </div>
+  </div>`;
+}
+let dragId=null;
+function wireKanban(){
+  document.querySelectorAll('.deal').forEach(el=>{
+    el.addEventListener('dragstart',e=>{dragId=el.dataset.id;e.dataTransfer.effectAllowed='move';});
+    el.addEventListener('dragend',()=>{dragId=null;
+      document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over'));});
+  });
+  document.querySelectorAll('.col').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drag-over');});
+    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
+    col.addEventListener('drop',async e=>{
+      e.preventDefault();col.classList.remove('drag-over');
+      if(!dragId)return;
+      const d=state.deals.find(x=>x.id===dragId),newStage=col.dataset.stage;
+      if(d&&d.stage!==newStage){
+        if(newStage==='Build'&&!buildReady(d)){
+          alert('This job is not ready for Build.\n\nThe back-office check still needs: '+missingItems(d).join(', ')+'.');
+          return;
+        }
+        const prev=d.stage;d.stage=newStage;render();wireKanban();
+        const patch={stage:newStage};
+        if(newStage==='Completed'&&!d.completed_at)patch.completed_at=todayStr();
+        try{const row=await dbUpdate('deals',d.id,patch);Object.assign(d,row);}
+        catch(e){d.stage=prev;render();wireKanban();alert('Could not move job: '+(e.message||e));}
+      }
+    });
+  });
+}
+
+/* ============================ CALLS ============================ */
+let callFilter='All';
+function viewCalls(){
+  let list=[...state.calls];
+  if(callFilter==='Missed')list=list.filter(c=>c.status==='missed');
+  else if(callFilter==='Calls')list=list.filter(c=>c.channel==='Call');
+  else if(callFilter==='SMS')list=list.filter(c=>c.channel==='SMS');
+  list.sort((a,b)=>(b.occurred_at||'').localeCompare(a.occurred_at||''));
+  const missed=state.calls.filter(c=>c.status==='missed').length;
+  return `
+  <div class="view-head">
+    <div><h1>Calls & Messages</h1><p>${state.calls.length} logged · ${missed} missed · auto-captured once your phone line is connected</p></div>
+    <button class="btn" onclick="openCallForm()">+ Log a Call</button>
+  </div>
+  <div class="toolbar">
+    <select class="filter" onchange="callFilter=this.value;render()">
+      ${['All','Missed','Calls','SMS'].map(o=>`<option ${o===callFilter?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap">${list.length?`<table><thead><tr>
+    <th>When</th><th>Type</th><th>Contact</th><th>Number</th><th>Status</th><th>Summary</th><th></th>
+    </tr></thead><tbody>
+    ${list.map(c=>{
+      const num=c.from_number||c.to_number||'—';
+      const stClass=c.status==='missed'?'b-red':c.status==='answered'?'b-green':'b-gray';
+      return `<tr class="${c.status==='missed'?'missed':''}">
+        <td>${fmtDate(c.occurred_at)}</td>
+        <td><span class="badge b-gray">${c.channel==='SMS'?'💬 SMS':'📞 '+(c.direction||'call')}</span></td>
+        <td>${c.contact_id?`<span class="name-link" onclick="openContactDetail('${c.contact_id}')">${esc(contactName(c.contact_id))}</span>`:'—'}</td>
+        <td>${esc(num)}</td>
+        <td><span class="badge ${stClass}">${esc(c.status||'—')}</span></td>
+        <td>${esc(c.ai_summary||c.transcript||'—')}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick="openCallForm('${c.id}')">✎</button>
+          <button class="icon-btn" onclick="deleteCall('${c.id}')">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody></table>`:
+    `<div class="empty"><div class="big">📞</div>No calls or messages logged yet.<br>
+      Log one manually, or connect your Twilio phone line to capture them automatically.</div>`}</div>`;
+}
+function openCallForm(id){
+  const c=id?state.calls.find(x=>x.id===id):{};
+  openModal(`
+  <div class="modal-head"><h2>${id?'Edit':'Log a'} Call / Message</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field-row">
+      <div class="field"><label>Type</label>
+        <select id="k_channel">${['Call','SMS'].map(o=>`<option ${o===(c.channel||'Call')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Direction</label>
+        <select id="k_dir">${['inbound','outbound'].map(o=>`<option ${o===(c.direction||'inbound')?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Status</label>
+        <select id="k_status">${['answered','missed','voicemail','completed']
+          .map(o=>`<option ${o===(c.status||'answered')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Date</label>
+        <input type="date" id="k_date" value="${(c.occurred_at||todayStr()).slice(0,10)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Contact</label>
+        <select id="k_contact"><option value="">— not linked —</option>${selectContactOptions(c.contact_id)}</select></div>
+      <div class="field"><label>Phone number</label>
+        <input type="tel" id="k_number" value="${esc(c.from_number||c.to_number||'')}"></div>
+    </div>
+    <div class="field"><label>Summary / what was said</label>
+      <textarea id="k_summary" rows="3">${esc(c.ai_summary||c.transcript||'')}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="saveBtn" onclick="saveCall('${id||''}')">${id?'Save Changes':'Log It'}</button>
+  </div>`);
+}
+async function saveCall(id){
+  const dir=val('k_dir'),number=val('k_number');
+  const data={
+    channel:val('k_channel'),direction:dir,status:val('k_status'),
+    occurred_at:val('k_date')||todayStr(),
+    contact_id:val('k_contact')||null,
+    from_number:dir==='inbound'?number:null,
+    to_number:dir==='outbound'?number:null,
+    ai_summary:val('k_summary'),
+  };
+  const btn=document.getElementById('saveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    if(id){const row=await dbUpdate('calls',id,data);
+      const i=state.calls.findIndex(x=>x.id===id);if(i>=0)state.calls[i]=row;}
+    else{const row=await dbInsert('calls',data);state.calls.push(row);}
+    closeModal();buildNav();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Log It';}
+    alert('Could not save: '+(e.message||e));
+  }
+}
+async function deleteCall(id){
+  if(!confirm('Delete this call record?'))return;
+  try{
+    await dbDelete('calls',id);
+    state.calls=state.calls.filter(x=>x.id!==id);
+    buildNav();render();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+}
+
+/* ============================ ACTIVITIES ============================ */
+let actFilter='All';
+function viewActivities(){
+  let list=[...state.activities];
+  if(actFilter!=='All')list=list.filter(a=>a.type===actFilter);
+  list.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return `
+  <div class="view-head">
+    <div><h1>Activity Log</h1><p>${state.activities.length} interactions logged</p></div>
+    <button class="btn" onclick="openActivityForm()">+ Log Activity</button>
+  </div>
+  <div class="toolbar">
+    <select class="filter" onchange="actFilter=this.value;render()">
+      ${['All','Call','Meeting','Email','Note'].map(o=>`<option ${o===actFilter?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap">${list.length?`<table><thead><tr>
+    <th>Date</th><th>Type</th><th>Contact</th><th>Summary</th><th></th></tr></thead><tbody>
+    ${list.map(a=>`<tr>
+      <td>${fmtDate(a.date)}</td>
+      <td><span class="badge b-gray">${ACT_ICON[a.type]||''} ${a.type}</span></td>
+      <td><span class="name-link" onclick="openContactDetail('${a.contact_id}')">${esc(contactName(a.contact_id))}</span></td>
+      <td>${esc(a.summary)}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" onclick="openActivityForm('${a.id}')">✎</button>
+        <button class="icon-btn" onclick="deleteActivity('${a.id}')">🗑</button>
+      </div></td>
+    </tr>`).join('')}</tbody></table>`:
+    `<div class="empty"><div class="big">✦</div>No activities logged yet.</div>`}</div>`;
+}
+
+/* ============================ REMINDERS ============================ */
+let remFilter='Open';
+function viewReminders(){
+  let list=[...state.reminders];
+  if(remFilter==='Open')list=list.filter(r=>!r.done);
+  else if(remFilter==='Done')list=list.filter(r=>r.done);
+  list.sort((a,b)=>{
+    if(a.done!==b.done)return a.done?1:-1;
+    return (a.due_date||'').localeCompare(b.due_date||'');
+  });
+  const overdue=state.reminders.filter(r=>!r.done&&daysUntil(r.due_date)<0).length;
+  return `
+  <div class="view-head">
+    <div><h1>Follow-ups</h1><p>${state.reminders.filter(r=>!r.done).length} open · ${overdue} overdue</p></div>
+    <button class="btn" onclick="openReminderForm()">+ New Follow-up</button>
+  </div>
+  <div class="toolbar">
+    <select class="filter" onchange="remFilter=this.value;render()">
+      ${['Open','Done','All'].map(o=>`<option ${o===remFilter?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap">${list.length?`<table><thead><tr>
+    <th style="width:40px"></th><th>Task</th><th>Contact</th><th>Due</th><th></th></tr></thead><tbody>
+    ${list.map(r=>{
+      const du=daysUntil(r.due_date);
+      let due=fmtDate(r.due_date);
+      if(!r.done&&du<0)due=`<span class="badge b-red">${due} · ${-du}d late</span>`;
+      else if(!r.done&&du===0)due=`<span class="badge b-amber">${due} · today</span>`;
+      else due=`<span style="color:var(--muted)">${due}</span>`;
+      return `<tr>
+        <td><input type="checkbox" ${r.done?'checked':''} style="width:17px;height:17px;cursor:pointer"
+          onchange="toggleReminder('${r.id}')"></td>
+        <td style="${r.done?'text-decoration:line-through;color:var(--muted)':''}">${esc(r.title)}</td>
+        <td>${r.contact_id?`<span class="name-link" onclick="openContactDetail('${r.contact_id}')">${esc(contactName(r.contact_id))}</span>`:'—'}</td>
+        <td>${due}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick="openReminderForm('${r.id}')">✎</button>
+          <button class="icon-btn" onclick="deleteReminder('${r.id}')">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody></table>`:
+    `<div class="empty"><div class="big">◷</div>Nothing here. You're all caught up.</div>`}</div>`;
+}
+async function toggleReminder(id){
+  const r=state.reminders.find(x=>x.id===id);
+  if(!r)return;
+  const prev=r.done;r.done=!r.done;render();
+  try{const row=await dbUpdate('reminders',id,{done:r.done});Object.assign(r,row);}
+  catch(e){r.done=prev;render();alert('Could not update: '+(e.message||e));}
+}
+
+/* ============================ MODALS ============================ */
+function openModal(html,wide){
+  const m=document.getElementById('modal');
+  m.className='modal'+(wide?' wide':'');
+  m.innerHTML=html;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('overlay').classList.remove('open');}
+function selectContactOptions(sel){
+  return state.contacts.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.name)}${c.company?' — '+esc(c.company):''}</option>`).join('');
+}
+
+/* ---- Contact ---- */
+function openContactForm(id){
+  const c=id?contact(id):{};
+  openModal(`
+  <div class="modal-head"><h2>${id?'Edit':'New'} Contact</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field-row">
+      <div class="field"><label>Full name *</label>
+        <input type="text" id="f_name" value="${esc(c.name||'')}"></div>
+      <div class="field"><label>Phone</label>
+        <input type="tel" id="f_phone" value="${esc(c.phone||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Email</label>
+        <input type="email" id="f_email" value="${esc(c.email||'')}"></div>
+      <div class="field"><label>Property / Company</label>
+        <input type="text" id="f_company" value="${esc(c.company||'')}" placeholder="Optional — for commercial"></div>
+    </div>
+    <div class="field"><label>Job title</label>
+      <input type="text" id="f_title" value="${esc(c.title||'')}" placeholder="Optional"></div>
+    <div class="field-row">
+      <div class="field"><label>Type</label>
+        <select id="f_type">${['Lead','Customer'].map(o=>`<option ${o===(c.type||'Lead')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Status</label>
+        <select id="f_status">${CONTACT_STATUS.map(o=>`<option ${o===(c.status||'New')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Lead source</label>
+        <select id="f_source">${LEAD_SOURCES.map(o=>`<option ${o===(c.source||'Storm / Door-knock')?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Notes</label>
+      <textarea id="f_notes" rows="3">${esc(c.notes||'')}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="saveBtn" onclick="saveContact('${id||''}')">${id?'Save Changes':'Add Contact'}</button>
+  </div>`);
+}
+async function saveContact(id){
+  const name=val('f_name');
+  if(!name){alert('Please enter a name.');return;}
+  const data={name,title:val('f_title'),company:val('f_company'),email:val('f_email'),
+    phone:val('f_phone'),type:val('f_type'),status:val('f_status'),source:val('f_source'),
+    notes:val('f_notes')};
+  const btn=document.getElementById('saveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    if(id){const row=await dbUpdate('contacts',id,data);
+      const i=state.contacts.findIndex(x=>x.id===id);if(i>=0)state.contacts[i]=row;}
+    else{const row=await dbInsert('contacts',data);state.contacts.push(row);}
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Add Contact';}
+    alert('Could not save contact: '+(e.message||e));
+  }
+}
+async function deleteContact(id){
+  const c=contact(id);if(!c)return;
+  if(!confirm(`Delete ${c.name}? This also removes their jobs, activities, and follow-ups.`))return;
+  showLoading(true);
+  try{
+    await sb.from('activities').delete().eq('contact_id',id);
+    // Photos live in storage, not in a table, so deleting the deal row is not
+    // enough -- the image files have to go first or they are orphaned there.
+    const goneDeals=state.deals.filter(d=>d.contact_id===id).map(d=>d.id);
+    const gonePaths=state.job_photos.filter(p=>goneDeals.indexOf(p.deal_id)>=0)
+      .map(p=>p.storage_path);
+    if(gonePaths.length){try{await sb.storage.from('job-photos').remove(gonePaths);}catch(_e){}}
+    await sb.from('deals').delete().eq('contact_id',id);
+    await sb.from('reminders').delete().eq('contact_id',id);
+    await dbDelete('contacts',id);
+    state.activities=state.activities.filter(x=>x.contact_id!==id);
+    state.deals=state.deals.filter(x=>x.contact_id!==id);
+    state.reminders=state.reminders.filter(x=>x.contact_id!==id);
+    state.job_photos=state.job_photos.filter(p=>goneDeals.indexOf(p.deal_id)<0);
+    state.roof_measurements=state.roof_measurements.filter(m=>goneDeals.indexOf(m.deal_id)<0);
+    state.calls.forEach(k=>{if(k.contact_id===id)k.contact_id=null;});
+    state.contacts=state.contacts.filter(x=>x.id!==id);
+    closeModal();render();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+  showLoading(false);
+}
+function openContactDetail(id){
+  const c=contact(id);if(!c)return;
+  const deals=state.deals.filter(d=>d.contact_id===id);
+  const acts=state.activities.filter(a=>a.contact_id===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const rems=state.reminders.filter(r=>r.contact_id===id&&!r.done);
+  const calls=state.calls.filter(k=>k.contact_id===id).sort((a,b)=>(b.occurred_at||'').localeCompare(a.occurred_at||''));
+  const reqs=state.review_requests.filter(r=>r.contact_id===id).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  openModal(`
+  <div class="modal-head"><h2>${esc(c.name)}
+    <span class="badge ${c.type==='Lead'?'b-lead':'b-customer'}" style="margin-left:6px">${c.type}</span></h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="detail-grid">
+      <div><div class="dl">Phone</div><div class="dv">${esc(c.phone||'—')}</div></div>
+      <div><div class="dl">Email</div><div class="dv">${esc(c.email||'—')}</div></div>
+      <div><div class="dl">Property / Company</div><div class="dv">${esc(c.company||'—')}</div></div>
+      <div><div class="dl">Lead source</div><div class="dv">${esc(c.source||'—')}</div></div>
+      <div><div class="dl">Status</div><div class="dv">${statusBadge(c.status)}</div></div>
+      <div><div class="dl">Title</div><div class="dv">${esc(c.title||'—')}</div></div>
+    </div>
+    ${c.notes?`<div class="sub-section"><div class="dl">Notes</div>
+      <div class="dv" style="margin-top:3px">${esc(c.notes)}</div></div>`:''}
+    <div class="sub-section"><h4>Jobs <button class="btn sm secondary"
+      onclick="openDealForm('','${id}')">+ Add</button></h4>
+      ${deals.length?deals.map(d=>`<div class="mini-item" style="cursor:pointer" onclick="closeModal();openJobWorkspace('${d.id}')"><div class="mi-top">
+        <span>${esc(d.title)}</span><span class="badge b-gray">${d.stage}</span></div>
+        <div class="mi-sub">${money(d.value)}${d.service_type?' · '+esc(d.service_type):''} · close ${fmtDate(d.expected_close)}</div></div>`).join(''):
+        '<div class="mi-sub">No jobs yet.</div>'}
+    </div>
+    <div class="sub-section"><h4>Calls & Messages</h4>
+      ${calls.length?calls.slice(0,6).map(k=>`<div class="mini-item"><div class="mi-top">
+        <span>${k.channel==='SMS'?'💬':'📞'} ${esc(k.ai_summary||k.transcript||k.direction)}</span>
+        <span class="badge ${k.status==='missed'?'b-red':'b-gray'}">${esc(k.status||'')}</span></div>
+        <div class="mi-sub">${fmtDate(k.occurred_at)}</div></div>`).join(''):
+        '<div class="mi-sub">No calls logged.</div>'}
+    </div>
+    <div class="sub-section"><h4>Review Requests <button class="btn sm secondary"
+      onclick="openReviewRequest('${id}','')">★ Request</button></h4>
+      ${reqs.length?reqs.map(r=>`<div class="mini-item"><div class="mi-top">
+        <span>★ Review request</span><span class="badge ${r.status==='sent'?'b-green':'b-gray'}">${esc(r.status||'')}</span></div>
+        <div class="mi-sub">${fmtDate(r.sent_at||r.created_at)}</div></div>`).join(''):
+        '<div class="mi-sub">No review requests yet.</div>'}
+    </div>
+    <div class="sub-section"><h4>Activity <button class="btn sm secondary"
+      onclick="openActivityForm('','${id}')">+ Log</button></h4>
+      ${acts.length?acts.map(a=>`<div class="mini-item"><div class="mi-top">
+        <span>${ACT_ICON[a.type]||''} ${esc(a.summary)}</span><span class="badge b-gray">${a.type}</span></div>
+        <div class="mi-sub">${fmtDate(a.date)}</div></div>`).join(''):
+        '<div class="mi-sub">No activity logged.</div>'}
+    </div>
+    <div class="sub-section"><h4>Open Follow-ups <button class="btn sm secondary"
+      onclick="openReminderForm('','${id}')">+ Add</button></h4>
+      ${rems.length?rems.map(r=>`<div class="mini-item"><div class="mi-top">
+        <span>${esc(r.title)}</span><span class="mi-sub">${fmtDate(r.due_date)}</span></div></div>`).join(''):
+        '<div class="mi-sub">No open follow-ups.</div>'}
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn danger" onclick="deleteContact('${id}')">Delete</button>
+    <button class="btn secondary" onclick="closeModal()">Close</button>
+    <button class="btn" onclick="openContactForm('${id}')">Edit Contact</button>
+  </div>`,true);
+}
+
+/* ---- Job (deal) ---- */
+function openDealForm(id,presetContact){
+  const d=id?state.deals.find(x=>x.id===id):{};
+  if(!state.contacts.length){alert('Add a contact first — jobs are linked to a contact.');return;}
+  openModal(`
+  <div class="modal-head"><h2>${id?'Edit':'New'} Job</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Job name *</label>
+      <input type="text" id="d_title" value="${esc(d.title||'')}" placeholder="e.g. Full roof replacement"></div>
+    <div class="field"><label>Contact *</label>
+      <select id="d_contact">${selectContactOptions(d.contact_id||presetContact)}</select></div>
+    <div class="field"><label>Job address</label>
+      <input type="text" id="d_address" value="${esc(d.job_address||'')}" placeholder="Street, city"></div>
+    <div class="field-row">
+      <div class="field"><label>Service type</label>
+        <select id="d_service">${SERVICE_TYPES.map(o=>`<option ${o===(d.service_type||'Full Roof Replacement')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Insurance claim</label>
+        <select id="d_ins">${['No','Yes'].map(o=>`<option ${o===(d.insurance_claim?'Yes':'No')?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Value ($)</label>
+        <input type="number" id="d_value" value="${d.value!=null?d.value:''}" min="0"></div>
+      <div class="field"><label>Stage</label>
+        <select id="d_stage">${STAGES.map(s=>`<option ${s===(d.stage||'New Lead')?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Expected close</label>
+        <input type="date" id="d_close" value="${d.expected_close||''}"></div>
+    </div>
+    <div class="field"><label>Assigned rep <span style="color:var(--muted);font-weight:400">— who owns this job; the support bot routes its reminders here</span></label>
+      <select id="d_assigned">${state.members.map(m=>`<option value="${m.user_id}" ${(d.assigned_to||currentUser.id)===m.user_id?'selected':''}>${esc(m.display_name||m.email||'Teammate')}${m.user_id===currentUser.id?' (you)':''}</option>`).join('')}</select></div>
+    <div class="field"><label>Completion date <span style="color:var(--muted);font-weight:400">— set when the job is finished; schedules the review request</span></label>
+      <input type="date" id="d_completed" value="${d.completed_at||''}"></div>
+    <div class="field"><label>Next action <span style="color:var(--muted);font-weight:400">— AI will suggest this once your phone line is connected</span></label>
+      <input type="text" id="d_next" value="${esc(d.ai_next_action||'')}" placeholder="e.g. Call to confirm inspection"></div>
+    <div class="field"><label>Notes</label>
+      <textarea id="d_notes" rows="2">${esc(d.notes||'')}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="saveBtn" onclick="saveDeal('${id||''}')">${id?'Save Changes':'Add Job'}</button>
+  </div>`);
+}
+async function saveDeal(id){
+  const title=val('d_title');
+  if(!title){alert('Please enter a job name.');return;}
+  const stage=val('d_stage');
+  const data={title,contact_id:val('d_contact')||null,
+    job_address:val('d_address'),service_type:val('d_service'),
+    insurance_claim:val('d_ins')==='Yes',
+    value:Number(document.getElementById('d_value').value||0),
+    stage,expected_close:val('d_close')||null,
+    completed_at:val('d_completed')||(stage==='Completed'?todayStr():null),
+    assigned_to:val('d_assigned')||currentUser.id,
+    ai_next_action:val('d_next'),notes:val('d_notes')};
+  const btn=document.getElementById('saveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  if(stage==='Build'){
+    const dd=id?state.deals.find(x=>x.id===id):null;
+    if(!dd||!buildReady(dd)){
+      alert('This job can\'t move to Build yet.\n\nThe back-office check still needs: '
+        +(dd?missingItems(dd).join(', '):'inspection, photos, measurement, a signed estimate, material selections')+'.');
+      if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Add Job';}
+      return;
+    }
+  }
+  try{
+    if(id){const row=await dbUpdate('deals',id,data);
+      const i=state.deals.findIndex(x=>x.id===id);if(i>=0)state.deals[i]=row;}
+    else{const row=await dbInsert('deals',data);state.deals.push(row);}
+    closeModal();render();if(currentView==='pipeline')wireKanban();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Add Job';}
+    alert('Could not save job: '+(e.message||e));
+  }
+}
+async function deleteDeal(id){
+  if(!confirm('Delete this job?'))return;
+  try{
+    const photoPaths=state.job_photos.filter(p=>p.deal_id===id).map(p=>p.storage_path);
+    if(photoPaths.length){try{await sb.storage.from('job-photos').remove(photoPaths);}catch(_e){}}
+    await dbDelete('deals',id);
+    state.deals=state.deals.filter(x=>x.id!==id);
+    state.roof_measurements=state.roof_measurements.filter(x=>x.deal_id!==id);
+    state.job_photos=state.job_photos.filter(x=>x.deal_id!==id);
+    closeModal();render();if(currentView==='pipeline')wireKanban();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+}
+
+/* ---- Activity ---- */
+function openActivityForm(id,presetContact){
+  const a=id?state.activities.find(x=>x.id===id):{};
+  if(!state.contacts.length){alert('Add a contact first.');return;}
+  openModal(`
+  <div class="modal-head"><h2>${id?'Edit':'Log'} Activity</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field-row">
+      <div class="field"><label>Type</label>
+        <select id="a_type">${['Call','Meeting','Email','Note']
+          .map(o=>`<option ${o===(a.type||'Call')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>Date</label>
+        <input type="date" id="a_date" value="${a.date||todayStr()}"></div>
+    </div>
+    <div class="field"><label>Contact *</label>
+      <select id="a_contact">${selectContactOptions(a.contact_id||presetContact)}</select></div>
+    <div class="field"><label>Summary *</label>
+      <textarea id="a_summary" rows="3">${esc(a.summary||'')}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="saveBtn" onclick="saveActivity('${id||''}')">${id?'Save Changes':'Log Activity'}</button>
+  </div>`);
+}
+async function saveActivity(id){
+  const summary=val('a_summary');
+  if(!summary){alert('Please enter a summary.');return;}
+  const data={type:val('a_type'),date:val('a_date')||todayStr(),
+    contact_id:val('a_contact')||null,summary};
+  const btn=document.getElementById('saveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    if(id){const row=await dbUpdate('activities',id,data);
+      const i=state.activities.findIndex(x=>x.id===id);if(i>=0)state.activities[i]=row;}
+    else{const row=await dbInsert('activities',data);state.activities.push(row);}
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Log Activity';}
+    alert('Could not save activity: '+(e.message||e));
+  }
+}
+async function deleteActivity(id){
+  if(!confirm('Delete this activity?'))return;
+  try{
+    await dbDelete('activities',id);
+    state.activities=state.activities.filter(x=>x.id!==id);
+    closeModal();render();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+}
+
+/* ---- Reminder ---- */
+function openReminderForm(id,presetContact){
+  const r=id?state.reminders.find(x=>x.id===id):{};
+  openModal(`
+  <div class="modal-head"><h2>${id?'Edit':'New'} Follow-up</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Task *</label>
+      <input type="text" id="r_title" value="${esc(r.title||'')}" placeholder="e.g. Call back about the quote"></div>
+    <div class="field-row">
+      <div class="field"><label>Due date</label>
+        <input type="date" id="r_due" value="${r.due_date||todayStr()}"></div>
+      <div class="field"><label>Related contact</label>
+        <select id="r_contact"><option value="">— none —</option>${selectContactOptions(r.contact_id||presetContact)}</select></div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="saveBtn" onclick="saveReminder('${id||''}')">${id?'Save Changes':'Add Follow-up'}</button>
+  </div>`);
+}
+async function saveReminder(id){
+  const title=val('r_title');
+  if(!title){alert('Please enter a task.');return;}
+  const data={title,due_date:val('r_due')||null,contact_id:val('r_contact')||null};
+  const btn=document.getElementById('saveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    if(id){const row=await dbUpdate('reminders',id,data);
+      const i=state.reminders.findIndex(x=>x.id===id);if(i>=0)state.reminders[i]=row;}
+    else{const row=await dbInsert('reminders',{...data,done:false});state.reminders.push(row);}
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=id?'Save Changes':'Add Follow-up';}
+    alert('Could not save follow-up: '+(e.message||e));
+  }
+}
+async function deleteReminder(id){
+  if(!confirm('Delete this follow-up?'))return;
+  try{
+    await dbDelete('reminders',id);
+    state.reminders=state.reminders.filter(x=>x.id!==id);
+    closeModal();render();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+}
+
+/* ============================ TRAINING ============================ */
+const TRAINING=[
+  {title:'Sales Fundamentals & Mindset',lessons:[
+    {t:'What selling really is',
+     c:'Selling is not about persuading people to buy things they do not need — it is about helping the right buyer reach a good decision faster. Your job is to diagnose a problem, show a credible path to a better outcome, and make it easy to act.',
+     k:'Lead with the customer\'s problem, not your product.'},
+    {t:'Building a winning mindset',
+     c:'Top performers treat rejection as information, not failure. They stay consistent on the activities they control (calls, follow-ups, preparation) and detach from outcomes they cannot. Confidence comes from preparation and a genuine belief that you can help.',
+     k:'Control your inputs daily; the results will follow.'},
+    {t:'Understanding your buyer',
+     c:'Every buyer has a job to be done, a set of fears, and decision criteria. Map who is involved: the user, the economic buyer who controls budget, and anyone who can say no. The more clearly you understand their world, the less you have to "sell".',
+     k:'Know the buyer\'s priorities better than they\'ve articulated them.'},
+    {t:'The modern sales process',
+     c:'A healthy cycle moves through prospecting, discovery, presenting value, handling objections, closing, and follow-up. Each stage has an exit criterion — never advance a deal in your own mind that the buyer has not advanced in theirs.',
+     k:'Always confirm a clear next step before ending any conversation.'},
+  ]},
+  {title:'Prospecting & Lead Generation',lessons:[
+    {t:'Define your ideal customer profile',
+     c:'You cannot prospect everyone. Identify the industry, company size, role, and trigger events of the buyers who close fastest and stay longest. A sharp profile makes every later step easier.',
+     k:'Spend your time where you have an unfair advantage.'},
+    {t:'Choosing outreach channels',
+     c:'Cold calls, email, social selling, and referrals each have strengths. The best results come from combining them into a multi-touch sequence — most replies come after the fourth or fifth contact, not the first.',
+     k:'It usually takes 6–8 touches; one attempt is not prospecting.'},
+    {t:'Messages that get replies',
+     c:'Make outreach about them, not you. Reference a specific trigger or pain, keep it short, and ask for one small, easy yes. Generic "checking in" messages get ignored; relevant, specific ones get answered.',
+     k:'Every message should pass the "so what?" test from the buyer\'s seat.'},
+    {t:'Filling the top of your pipeline',
+     c:'Pipeline math is simple: if your close rate and cycle length are fixed, the only lever for more revenue is more qualified opportunities. Block prospecting time daily so a slow month never surprises you.',
+     k:'Prospect every day — even when you are busy closing.'},
+  ]},
+  {title:'Discovery & Needs Analysis',lessons:[
+    {t:'The discovery call framework',
+     c:'A strong discovery call sets an agenda, explores the current situation, quantifies the cost of the problem, and confirms whether it is worth solving now. Discovery is not an interrogation — it is a guided conversation.',
+     k:'Earn the right to present by understanding first.'},
+    {t:'Asking great questions',
+     c:'Use open-ended questions to explore, and follow the SPIN pattern: Situation, Problem, Implication, and Need-payoff. Implication questions ("what does that cost you?") are where urgency is built.',
+     k:'The implication question turns a "nice to have" into a priority.'},
+    {t:'Active listening',
+     c:'Aim to listen far more than you talk on a discovery call. Take notes, paraphrase what you heard, and pause before responding. Buyers trust people who clearly understand them.',
+     k:'Talk less than half the time in discovery.'},
+    {t:'Qualifying the opportunity',
+     c:'Before investing real effort, confirm there is a real need, a budget or path to one, access to the decision maker, and a timeline. If a deal fails qualification, it is kinder to everyone to disqualify it early.',
+     k:'A fast no is more valuable than a slow maybe.'},
+  ]},
+  {title:'Presenting & Demonstrating Value',lessons:[
+    {t:'Tailoring your pitch',
+     c:'A generic pitch is a wasted pitch. Use what you learned in discovery to present only the two or three points that matter to this buyer, in their language, tied to their stated goals.',
+     k:'Present their priorities back to them, not your full feature list.'},
+    {t:'Features, benefits, and outcomes',
+     c:'A feature is what it is; a benefit is what it does; an outcome is what it means for the buyer. Always connect the chain: "Because of X (feature), you can Y (benefit), which means Z (outcome you care about)."',
+     k:'Buyers pay for outcomes, not features.'},
+    {t:'Storytelling and social proof',
+     c:'A relevant customer story is more persuasive than a spec sheet. Use a similar customer, their problem, what changed, and the measurable result. Proof from peers lowers perceived risk.',
+     k:'Show a buyer like them who already succeeded.'},
+    {t:'Running an effective demo',
+     c:'Open with the end result, then show the path to it. Keep it interactive — ask questions, check reactions, and stop when you have made the point. A demo is a conversation, not a monologue.',
+     k:'Demo the destination first, then the journey.'},
+  ]},
+  {title:'Handling Objections',lessons:[
+    {t:'Why objections happen',
+     c:'Objections are usually a sign of engagement, not rejection — a buyer who is silent is not buying. Most objections come from unanswered questions, unaddressed risk, or unestablished value.',
+     k:'An objection is a request for more information.'},
+    {t:'The objection-handling framework',
+     c:'Acknowledge the concern without getting defensive, explore it with a question to find the real issue, respond directly, then confirm you have resolved it. Skipping the explore step means you often answer the wrong objection.',
+     k:'Acknowledge, explore, respond, confirm — in that order.'},
+    {t:'Handling price objections',
+     c:'"It\'s too expensive" usually means value has not been established or it is being compared to the wrong thing. Re-anchor on the cost of the problem and the return, rather than discounting reflexively.',
+     k:'Defend value before you ever touch price.'},
+    {t:'Stalls and "I need to think about it"',
+     c:'A stall is different from an objection — it is an absence of a decision. Respond by surfacing what specifically is unresolved: "Happy to give you time — what is the main thing you are weighing?"',
+     k:'Turn a vague stall into a specific, answerable concern.'},
+  ]},
+  {title:'Closing the Sale',lessons:[
+    {t:'Recognizing buying signals',
+     c:'Buyers signal readiness by asking about implementation, pricing specifics, timelines, or references. When you hear these, stop selling and start guiding the decision.',
+     k:'When they picture owning it, move to close.'},
+    {t:'Closing techniques',
+     c:'The best close is a natural next step, not a trick. A simple summary close ("We agreed on A, B, and C — shall we get started?") or an alternative close ("Would the 1st or the 15th work better?") moves things forward respectfully.',
+     k:'Ask for the business clearly and without apology.'},
+    {t:'Creating urgency ethically',
+     c:'Real urgency comes from the buyer\'s own cost of inaction — every month unsolved has a price. Manufactured, fake-deadline pressure damages trust and tends to unravel later.',
+     k:'Anchor urgency in their cost of waiting, not a fake deadline.'},
+    {t:'Negotiation basics',
+     c:'Never give a concession without getting something in return — a faster signature, a longer term, a reference. Know your walk-away point before you start, and protect price by trading on terms.',
+     k:'Trade concessions; never just give them away.'},
+  ]},
+  {title:'Follow-Up & Account Growth',lessons:[
+    {t:'The follow-up cadence',
+     c:'Most deals are lost in the gaps between conversations. Agree on the next step and date every time, and follow up with value — a relevant article, an answer, an introduction — not just "any update?"',
+     k:'Every follow-up should give the buyer a reason to reply.'},
+    {t:'Onboarding new customers',
+     c:'The sale is the start of the relationship. A strong handoff and early win build trust, reduce churn, and set up every future expansion conversation.',
+     k:'A great onboarding is your best future upsell.'},
+    {t:'Upselling and cross-selling',
+     c:'Existing customers are your warmest pipeline. Track their goals over time and introduce additional value when it genuinely fits — expansion should feel like service, not a sales push.',
+     k:'Grow accounts by solving the next problem, not pushing product.'},
+    {t:'Referrals and reviews',
+     c:'A happy customer is your most credible sales channel. Ask for referrals and reviews at moments of clear success, and make the ask specific and easy to act on.',
+     k:'Ask for referrals when the customer is happiest.'},
+  ]},
+];
+function trainStats(){
+  let total=0,done=0;
+  TRAINING.forEach((m,mi)=>m.lessons.forEach((l,li)=>{
+    total++;if(state.training.progress[mi+'-'+li])done++;
+  }));
+  return {total,done,pct:total?Math.round(done/total*100):0};
+}
+function firstIncompleteModule(){
+  for(let mi=0;mi<TRAINING.length;mi++){
+    if(!TRAINING[mi].lessons.every((l,li)=>state.training.progress[mi+'-'+li]))return mi;
+  }
+  return 0;
+}
+function viewTraining(){
+  const s=trainStats();
+  return `
+  <div class="view-head">
+    <div><h1>Sales Training</h1><p>A structured path through the full sales cycle — ${s.total} lessons</p></div>
+  </div>
+  <div class="train-progress">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <strong style="font-size:15px">Your progress</strong>
+      <span style="color:var(--muted);font-size:13px">${s.done} of ${s.total} lessons · ${s.pct}%</span>
+    </div>
+    <div class="prog-track"><div class="prog-fill" style="width:${s.pct}%"></div></div>
+  </div>
+  ${TRAINING.map((m,mi)=>{
+    const ld=m.lessons.filter((l,li)=>state.training.progress[mi+'-'+li]).length;
+    return `<div class="module ${mi===firstIncompleteModule()&&ld<m.lessons.length?'open':''}" id="mod${mi}">
+      <div class="module-head" onclick="toggleModule(${mi})">
+        <div class="module-num">${mi+1}</div>
+        <div class="mh-title">${esc(m.title)}
+          <div class="mh-meta">${ld}/${m.lessons.length} lessons complete</div></div>
+        <div class="chev">▸</div>
+      </div>
+      <div class="lessons">${m.lessons.map((l,li)=>{
+        const dn=!!state.training.progress[mi+'-'+li];
+        return `<div class="lesson">
+          <div class="lcheck"><input type="checkbox" ${dn?'checked':''}
+            onchange="toggleLesson(${mi},${li})"></div>
+          <div class="lesson-body">
+            <div class="lt ${dn?'done':''}">${esc(l.t)}</div>
+            <div class="lc">${esc(l.c)}</div>
+            <div class="lk"><strong>Key takeaway:</strong> ${esc(l.k)}</div>
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }).join('')}
+  <div class="note-box">
+    <h3>My Training Notes</h3>
+    <textarea id="trainNotes" placeholder="Jot down scripts, objections you hear, things to practice…"
+      oninput="trainNotesChanged()">${esc(state.training.notes||'')}</textarea>
+    <div class="save-hint" id="noteHint">✓ Saved to your account</div>
+  </div>`;
+}
+function toggleModule(mi){document.getElementById('mod'+mi).classList.toggle('open');}
+function toggleLesson(mi,li){
+  const key=mi+'-'+li;
+  if(state.training.progress[key])delete state.training.progress[key];
+  else state.training.progress[key]=true;
+  const openIds=[...document.querySelectorAll('.module.open')].map(e=>e.id);
+  document.getElementById('view').innerHTML=viewTraining();
+  openIds.forEach(id=>{const e=document.getElementById(id);if(e)e.classList.add('open');});
+  saveTraining();
+}
+let noteTimer=null;
+function trainNotesChanged(){
+  state.training.notes=document.getElementById('trainNotes').value;
+  clearTimeout(noteTimer);
+  noteTimer=setTimeout(saveTraining,700);
+}
+async function saveTraining(){
+  try{
+    const {error}=await sb.from('training').upsert({
+      user_id:currentUser.id,progress:state.training.progress,
+      notes:state.training.notes||'',updated_at:new Date().toISOString()
+    });
+    if(error)throw error;
+    const h=document.getElementById('noteHint');
+    if(h){h.style.display='block';setTimeout(()=>{if(h)h.style.display='none';},1600);}
+  }catch(e){console.error('Training save failed:',e);}
+}
+
+/* ============================ SAMPLE DATA ============================ */
+async function loadSample(){
+  if(!confirm('Load a set of sample roofing contacts, jobs, calls and follow-ups so you can explore Ridgeline?'))return;
+  showLoading(true);
+  try{
+    const t=new Date();
+    const dd=n=>{const x=new Date(t);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
+    const seedContacts=[
+      {name:'Dale Winters',company:'',type:'Lead',status:'New',email:'dale.winters@email.com',
+        phone:'(555) 204-1180',title:'Homeowner',source:'Storm / Door-knock',
+        notes:'Hail damage on the north slope after last week\'s storm. Wants an inspection.'},
+      {name:'Maria Gonzalez',company:'',type:'Lead',status:'Working',email:'maria.g@email.com',
+        phone:'(555) 661-7724',title:'Homeowner',source:'Referral',
+        notes:'Referred by the Bradleys. Roof is 22 years old and starting to leak.'},
+      {name:'Tom Bradley',company:'',type:'Customer',status:'Active',email:'tom.bradley@email.com',
+        phone:'(555) 339-0042',title:'Homeowner',source:'Referral',
+        notes:'Full replacement completed last fall. Very happy — a strong referral source.'},
+      {name:'Karen Mitchell',company:'',type:'Lead',status:'Nurturing',email:'karen.m@email.com',
+        phone:'(555) 122-9087',title:'Homeowner',source:'Google',
+        notes:'Getting quotes, not urgent. Follow up in spring.'},
+      {name:'Greg Sullivan',company:'Westside Auto Group',type:'Customer',status:'Active',
+        email:'greg@westsideauto.com',phone:'(555) 887-3310',title:'Facilities Manager',
+        source:'Repeat Customer',notes:'Flat roof on the dealership. Repeat commercial client.'},
+    ];
+    const {data:cs,error:ce}=await sb.from('contacts').insert(seedContacts).select();
+    if(ce)throw ce;
+    const byEmail={};cs.forEach(c=>{byEmail[c.email]=c.id;});
+    const seedDeals=[
+      {title:'Full Roof Replacement — hail damage',contact_id:byEmail['dale.winters@email.com'],
+        value:14500,stage:'Inspection Scheduled',service_type:'Full Roof Replacement',
+        insurance_claim:true,job_address:'412 Oakmont Dr',expected_close:dd(20),
+        ai_next_action:'Confirm the inspection appointment for Thursday morning.',
+        notes:'Insurance adjuster involved.'},
+      {title:'Roof Replacement',contact_id:byEmail['maria.g@email.com'],
+        value:16200,stage:'Quote Sent',service_type:'Full Roof Replacement',
+        insurance_claim:false,job_address:'88 Linden Ave',expected_close:dd(12),
+        ai_next_action:'Follow up on the quote sent Monday.',notes:''},
+      {title:'Gutter Replacement',contact_id:byEmail['tom.bradley@email.com'],
+        value:3800,stage:'Contacted',service_type:'Gutters',
+        insurance_claim:false,job_address:'21 Maple Ct',expected_close:dd(30),notes:''},
+      {title:'Commercial Flat Roof Repair',contact_id:byEmail['greg@westsideauto.com'],
+        value:9500,stage:'Won',service_type:'Roof Repair',
+        insurance_claim:false,job_address:'1900 Industrial Blvd',expected_close:dd(-15),
+        notes:'Completed and invoiced.'},
+      {title:'Roof Repair — active leak',contact_id:byEmail['karen.m@email.com'],
+        value:1800,stage:'New Lead',service_type:'Roof Repair',
+        insurance_claim:false,job_address:'305 Birchwood Ln',expected_close:dd(45),notes:''},
+    ];
+    let res=await sb.from('deals').insert(seedDeals);if(res.error)throw res.error;
+    const seedCalls=[
+      {contact_id:byEmail['dale.winters@email.com'],channel:'Call',direction:'inbound',
+        status:'answered',from_number:'(555) 204-1180',occurred_at:dd(-1),duration_seconds:380,
+        ai_summary:'Discussed hail damage on the north slope. Scheduled a roof inspection.'},
+      {contact_id:null,channel:'Call',direction:'inbound',status:'missed',
+        from_number:'(555) 770-3321',occurred_at:dd(-1),
+        ai_summary:'Missed call — new caller, no voicemail. Needs a call back.'},
+      {contact_id:byEmail['maria.g@email.com'],channel:'SMS',direction:'inbound',
+        status:'completed',from_number:'(555) 661-7724',occurred_at:dd(-2),
+        ai_summary:'Texted asking when the quote would be ready.'},
+      {contact_id:byEmail['tom.bradley@email.com'],channel:'Call',direction:'outbound',
+        status:'answered',to_number:'(555) 339-0042',occurred_at:dd(-3),duration_seconds:210,
+        ai_summary:'Courtesy call — gutters job, confirmed start window.'},
+    ];
+    res=await sb.from('calls').insert(seedCalls);if(res.error)throw res.error;
+    const seedActs=[
+      {contact_id:byEmail['dale.winters@email.com'],type:'Call',date:dd(-1),
+        summary:'Intake call — hail damage, inspection booked for Thursday.'},
+      {contact_id:byEmail['greg@westsideauto.com'],type:'Meeting',date:dd(-4),
+        summary:'Walked the flat roof, agreed on the repair scope.'},
+      {contact_id:byEmail['maria.g@email.com'],type:'Email',date:dd(-2),
+        summary:'Sent the full roof replacement quote and material options.'},
+    ];
+    res=await sb.from('activities').insert(seedActs);if(res.error)throw res.error;
+    const seedRems=[
+      {title:'Call Dale to confirm Thursday inspection',
+        contact_id:byEmail['dale.winters@email.com'],due_date:dd(1),done:false},
+      {title:'Follow up with Maria on her quote',
+        contact_id:byEmail['maria.g@email.com'],due_date:dd(2),done:false},
+      {title:'Call back the missed number (555) 770-3321',
+        contact_id:null,due_date:dd(-1),done:false},
+      {title:'Spring check-in with Karen Mitchell',
+        contact_id:byEmail['karen.m@email.com'],due_date:dd(35),done:false},
+    ];
+    res=await sb.from('reminders').insert(seedRems);if(res.error)throw res.error;
+    await loadAll();
+  }catch(e){alert('Could not load sample data: '+(e.message||e));}
+  showLoading(false);
+  buildNav();render();
+}
+
+/* ============================ SETTINGS ============================ */
+function reviewLink(pid){
+  return pid?('https://search.google.com/local/writereview?placeid='+encodeURIComponent(pid)):'';
+}
+function viewSettings(){
+  const s=state.settings||{};
+  const link=reviewLink(s.google_place_id||'');
+  const admin=isAdmin();
+  return `
+  <div class="view-head">
+    <div><h1>Settings</h1><p>Your business details, phone line, and Review Engine</p></div>
+  </div>
+  ${admin?'':`<div class="card" style="padding:13px 16px;max-width:680px;margin-bottom:14px;background:rgba(251,191,36,.10);border-color:rgba(251,191,36,.35)">
+    <span style="font-size:12.5px;color:#fcd34d">Only owners and admins can change company settings — these are read-only for your role.</span></div>`}
+  <div class="card" style="padding:22px 24px;max-width:680px">
+    <fieldset ${admin?'':'disabled'} style="border:none;padding:0;margin:0;min-width:0">
+    <h3 style="font-size:15px;margin-bottom:3px">Business</h3>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px">Your company name is shared by your whole team and appears on quotes and review requests.</p>
+    <div class="field"><label>Business / company name</label>
+      <input type="text" id="s_business" value="${esc(s.business_name||(currentCompany&&currentCompany.name)||'')}" placeholder="e.g. Ridgeline Roofing"></div>
+    <div class="field-row">
+      <div class="field"><label>Business phone</label>
+        <input type="tel" id="s_phone" value="${esc(s.business_phone||'')}" placeholder="Shown on quotes"></div>
+      <div class="field"><label>License #</label>
+        <input type="text" id="s_license" value="${esc(s.business_license||'')}" placeholder="Optional, shown on quotes"></div>
+    </div>
+    <div class="field"><label>Google Place ID</label>
+      <input type="text" id="s_placeid" value="${esc(s.google_place_id||'')}" placeholder="ChIJ...">
+      <p style="color:var(--muted);font-size:11.5px;margin-top:5px">Find your Place ID with
+        <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener" style="color:var(--primary)">Google's Place ID Finder</a>.</p></div>
+    <div class="field"><label>Your Google review link (generated on save)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="s_link" readonly value="${esc(link)}" style="background:rgba(255,255,255,.04)"
+          placeholder="Add your Place ID above, then save">
+        ${link?`<a class="btn secondary sm" href="${esc(link)}" target="_blank" rel="noopener" style="white-space:nowrap">Test ↗</a>`:''}
+      </div></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+    <h3 style="font-size:15px;margin-bottom:3px">Phone line</h3>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px">The Twilio number your company answers on. Calls and texts to it are logged to this company automatically.</p>
+    <div class="field" style="max-width:320px"><label>Twilio number <span style="color:var(--muted);font-weight:400">— E.164 format, e.g. +15551234567</span></label>
+      <input type="tel" id="s_twilio" value="${esc(s.twilio_number||'')}" placeholder="+1..."></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+    <h3 style="font-size:15px;margin-bottom:3px">Review Engine timing</h3>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px">Controls when review requests go out after a job is marked Completed.</p>
+    <div class="field-row">
+      <div class="field"><label>Days after completion</label>
+        <input type="number" id="s_delay" min="0" max="60" value="${s.request_delay_days!=null?s.request_delay_days:2}"></div>
+      <div class="field"><label>Follow-up after (days)</label>
+        <input type="number" id="s_followup" min="0" max="60" value="${s.followup_delay_days!=null?s.followup_delay_days:6}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Send window — start hour (0–23)</label>
+        <input type="number" id="s_start" min="0" max="23" value="${s.send_start_hour!=null?s.send_start_hour:10}"></div>
+      <div class="field"><label>Send window — end hour (0–23)</label>
+        <input type="number" id="s_end" min="0" max="23" value="${s.send_end_hour!=null?s.send_end_hour:18}"></div>
+    </div>
+    <div class="field"><label>Review request message</label>
+      <textarea id="s_template" rows="4">${esc(s.request_template||DEFAULT_TEMPLATE)}</textarea>
+      <p style="color:var(--muted);font-size:11.5px;margin-top:5px">Placeholders you can use: {first_name}, {business_name}, {service_type}, {link}</p></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+    <h3 style="font-size:15px;margin-bottom:3px">Material orders</h3>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px">The waste factor added to roof measurements when a material order is generated.</p>
+    <div class="field" style="max-width:240px"><label>Default waste factor (%)</label>
+      <input type="number" id="s_waste" min="0" max="40" value="${s.waste_factor_pct!=null?s.waste_factor_pct:15}"></div>
+    </fieldset>
+    ${admin?`<div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:8px">
+      <span class="save-hint" id="setHint" style="margin:0">✓ Settings saved</span>
+      <button class="btn" id="setBtn" onclick="saveSettings()">Save Settings</button>
+    </div>`:''}
+    <p style="color:var(--muted);font-size:11.5px;margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+      Everyone on your team shares these settings. The Review Engine uses them to send review
+      requests automatically after a job is marked Completed.</p>
+  </div>`;
+}
+async function saveSettings(){
+  if(!isAdmin()){alert('Only owners and admins can change company settings.');return;}
+  const placeId=val('s_placeid');
+  const bizName=val('s_business');
+  const data={
+    company_id:currentCompany.id,
+    business_name:bizName,
+    business_phone:val('s_phone'),
+    business_license:val('s_license'),
+    google_place_id:placeId,
+    review_link:reviewLink(placeId),
+    twilio_number:val('s_twilio')||null,
+    request_delay_days:Number(document.getElementById('s_delay').value||2),
+    followup_delay_days:Number(document.getElementById('s_followup').value||6),
+    send_start_hour:Number(document.getElementById('s_start').value||10),
+    send_end_hour:Number(document.getElementById('s_end').value||18),
+    request_template:val('s_template')||DEFAULT_TEMPLATE,
+    waste_factor_pct:Number(document.getElementById('s_waste').value||15),
+    updated_at:new Date().toISOString(),
+  };
+  const btn=document.getElementById('setBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    const {error}=await sb.from('account_settings').upsert(data);
+    if(error)throw error;
+    state.settings=data;
+    if(bizName&&currentCompany&&bizName!==currentCompany.name){
+      const {error:ce}=await sb.from('companies').update({name:bizName}).eq('id',currentCompany.id);
+      if(!ce)currentCompany.name=bizName;
+    }
+    render();
+    const h=document.getElementById('setHint');
+    if(h){h.style.display='inline';
+      setTimeout(()=>{const x=document.getElementById('setHint');if(x)x.style.display='none';},2500);}
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Save Settings';}
+    alert('Could not save settings: '+(e.message||e));
+  }
+}
+
+/* ======================== REVIEW REQUESTS ======================== */
+function reviewMessageFor(c,d){
+  const s=state.settings||{};
+  const tmpl=s.request_template||DEFAULT_TEMPLATE;
+  const first=((c.name||'there').trim().split(/\s+/)[0])||'there';
+  const svc=(d&&d.service_type?d.service_type:'roofing project').toLowerCase();
+  return tmpl
+    .replace(/\{first_name\}/g,first)
+    .replace(/\{business_name\}/g,s.business_name||'our team')
+    .replace(/\{service_type\}/g,svc)
+    .replace(/\{link\}/g,s.review_link||'');
+}
+function reviewCardAction(d){
+  if(!d.contact_id)return '';
+  const reqs=state.review_requests.filter(r=>r.deal_id===d.id);
+  if(reqs.some(r=>r.status==='completed'))
+    return `<div class="rev-done">★ Review received</div>`;
+  if(reqs.length)
+    return `<div class="rev-done">★ Review requested</div>`;
+  return `<button class="btn sm" style="width:100%;margin-top:8px"
+    onclick="openReviewRequest('${d.contact_id}','${d.id}')">★ Request a review</button>`;
+}
+function openReviewRequest(contactId,dealId){
+  const c=contact(contactId);
+  if(!c){alert('Contact not found.');return;}
+  const s=state.settings||{};
+  if(!s.review_link){
+    alert('First add your Google Place ID in Settings — that generates your review link.');
+    closeModal();go('settings');return;
+  }
+  if(!c.phone){alert('This contact has no phone number. Add one first, then request a review.');return;}
+  const d=dealId?state.deals.find(x=>x.id===dealId):null;
+  const msg=reviewMessageFor(c,d);
+  openModal(`
+  <div class="modal-head"><h2>Request a Review</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="detail-grid" style="margin-bottom:14px">
+      <div><div class="dl">Customer</div><div class="dv">${esc(c.name)}</div></div>
+      <div><div class="dl">Phone</div><div class="dv">${esc(c.phone)}</div></div>
+    </div>
+    <div class="field"><label>Message — edit if you like</label>
+      <textarea id="rr_msg" rows="5">${esc(msg)}</textarea></div>
+    <div style="font-size:11.5px;color:var(--muted)">Your Google review link is already in the message.
+      On a phone, "Text the customer" opens your Messages app with this text ready to send.</div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="copyReviewMsg()">Copy message</button>
+    <button class="btn" onclick="sendReviewText('${contactId}','${dealId||''}')">Text the customer</button>
+  </div>`);
+}
+function copyReviewMsg(){
+  const t=document.getElementById('rr_msg');
+  if(!t)return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t.value)
+      .then(()=>alert('Message copied — paste it into a text to your customer.'))
+      .catch(()=>{t.focus();t.select();});
+  }else{t.focus();t.select();}
+}
+async function sendReviewText(contactId,dealId){
+  const c=contact(contactId);if(!c)return;
+  const s=state.settings||{};
+  const msg=(document.getElementById('rr_msg')||{}).value||'';
+  const num=(c.phone||'').replace(/[^\d+]/g,'');
+  try{
+    const row=await dbInsert('review_requests',{
+      contact_id:contactId,deal_id:dealId||null,status:'sent',
+      sent_at:new Date().toISOString(),message:msg,review_link:s.review_link||null
+    });
+    state.review_requests.unshift(row);
+  }catch(e){alert('Could not log the review request: '+(e.message||e));return;}
+  closeModal();render();
+  const a=document.createElement('a');
+  a.href='sms:'+num+'?body='+encodeURIComponent(msg);
+  a.click();
+}
+
+/* ======================== ESTIMATES ======================== */
+let estDraft={items:[],markup_pct:0,tax_pct:0,notes:'',terms:''};
+let estDealId=null;
+function computeEstimate(est){
+  const items=(est&&est.items)||[];
+  const markup=Number(est&&est.markup_pct||0)/100;
+  const taxr=Number(est&&est.tax_pct||0)/100;
+  const baseSum=items.reduce((s,it)=>s+Number(it.qty||0)*Number(it.unit_price||0),0);
+  const subtotal=baseSum*(1+markup);
+  const tax=subtotal*taxr;
+  return {baseSum,markupAmt:subtotal-baseSum,subtotal,tax,total:subtotal+tax};
+}
+function estimateTotal(est){return computeEstimate(est).total;}
+function openEstimateBuilder(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  if(!d){alert('Job not found.');return;}
+  estDealId=dealId;
+  const e=d.estimate;
+  estDraft=e?{items:(e.items||[]).map(x=>({...x})),markup_pct:e.markup_pct||0,
+    tax_pct:e.tax_pct||0,notes:e.notes||'',terms:e.terms||''}
+   :{items:[],markup_pct:0,tax_pct:0,notes:'',terms:''};
+  openModal(`
+  <div class="modal-head"><h2>Estimate — ${esc(d.title)}</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">
+      <span style="font-size:12px;color:var(--muted)">Build the quote line by line. Markup is folded into the prices the customer sees.</span>
+      <button class="btn sm secondary" style="white-space:nowrap" onclick="importFromMaterialOrder()">Import material order</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr>
+      <th>Description</th><th style="width:92px">Category</th><th style="width:58px">Qty</th>
+      <th style="width:88px">Unit $</th><th style="width:82px">Total</th><th style="width:28px"></th>
+    </tr></thead><tbody id="est_rows"></tbody></table></div>
+    <button class="btn sm secondary" style="margin-top:8px" onclick="addEstRow()">+ Add line</button>
+    <div class="field-row" style="margin-top:16px">
+      <div class="field"><label>Markup %</label>
+        <input type="number" id="est_markup" min="0" value="${estDraft.markup_pct}"
+          oninput="estDraft.markup_pct=Number(this.value||0);estRecalc()"></div>
+      <div class="field"><label>Tax %</label>
+        <input type="number" id="est_tax" min="0" step="0.01" value="${estDraft.tax_pct}"
+          oninput="estDraft.tax_pct=Number(this.value||0);estRecalc()"></div>
+    </div>
+    <div id="est_summary" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:6px 0 14px"></div>
+    <div class="field"><label>Notes for the customer</label>
+      <textarea id="est_notes" rows="2">${esc(estDraft.notes)}</textarea></div>
+    <div class="field"><label>Terms</label>
+      <textarea id="est_terms" rows="2">${esc(estDraft.terms)}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="estSaveBtn" onclick="saveEstimate()">Save Estimate</button>
+  </div>`,true);
+  renderEstimateRows();estRecalc();
+}
+function renderEstimateRows(){
+  const tb=document.getElementById('est_rows');
+  if(!tb)return;
+  if(!estDraft.items.length){
+    tb.innerHTML='<tr><td colspan="6" style="color:var(--muted);font-size:12.5px;padding:12px">No line items yet — add one, or import the material order.</td></tr>';
+    return;
+  }
+  tb.innerHTML=estDraft.items.map((it,i)=>`<tr>
+    <td><input type="text" value="${esc(it.desc||'')}" oninput="estEdit(${i},'desc',this.value)"></td>
+    <td><select onchange="estEdit(${i},'category',this.value)">${opts(['Materials','Labor','Other'],it.category||'Materials')}</select></td>
+    <td><input type="number" min="0" value="${it.qty!=null?it.qty:''}" oninput="estEdit(${i},'qty',this.value)"></td>
+    <td><input type="number" min="0" step="0.01" value="${it.unit_price!=null?it.unit_price:''}" oninput="estEdit(${i},'unit_price',this.value)"></td>
+    <td><span id="est_lt_${i}">${money(Number(it.qty||0)*Number(it.unit_price||0))}</span></td>
+    <td><button class="icon-btn" title="Remove" onclick="removeEstRow(${i})">✕</button></td>
+  </tr>`).join('');
+}
+function estEdit(i,field,value){
+  if(!estDraft.items[i])return;
+  estDraft.items[i][field]=(field==='qty'||field==='unit_price')?Number(value||0):value;
+  estRecalc();
+}
+function estRecalc(){
+  estDraft.items.forEach((it,i)=>{
+    const el=document.getElementById('est_lt_'+i);
+    if(el)el.textContent=money(Number(it.qty||0)*Number(it.unit_price||0));
+  });
+  const c=computeEstimate(estDraft),s=document.getElementById('est_summary');
+  if(s)s.innerHTML=
+    `<div class="est-sum-row"><span>Line items</span><span>${money(c.baseSum)}</span></div>`+
+    (estDraft.markup_pct?`<div class="est-sum-row"><span>Markup (${estDraft.markup_pct}%)</span><span>+ ${money(c.markupAmt)}</span></div>`:'')+
+    `<div class="est-sum-row"><span>Subtotal</span><span>${money(c.subtotal)}</span></div>`+
+    (estDraft.tax_pct?`<div class="est-sum-row"><span>Tax (${estDraft.tax_pct}%)</span><span>+ ${money(c.tax)}</span></div>`:'')+
+    `<div class="est-sum-row total"><span>Customer total</span><span>${money(c.total)}</span></div>`;
+}
+function addEstRow(){
+  estDraft.items.push({desc:'',category:'Materials',qty:1,unit_price:0});
+  renderEstimateRows();estRecalc();
+}
+function removeEstRow(i){
+  estDraft.items.splice(i,1);renderEstimateRows();estRecalc();
+}
+function importFromMaterialOrder(){
+  const m=state.roof_measurements.find(x=>x.deal_id===estDealId);
+  if(!m||!m.material_order||!m.material_order.items){
+    alert('No material order found for this job. Build the material order first (the 📐 button).');return;
+  }
+  let added=0;
+  m.material_order.items.forEach(it=>{
+    if(it.qty==null)return;
+    estDraft.items.push({desc:it.material,category:'Materials',qty:it.qty,unit_price:0});
+    added++;
+  });
+  renderEstimateRows();estRecalc();
+  if(added)alert(added+' line items imported. Add your unit prices.');
+}
+async function saveEstimate(){
+  estDraft.notes=val('est_notes');estDraft.terms=val('est_terms');
+  if(!estDraft.items.length){alert('Add at least one line item.');return;}
+  const estimate={items:estDraft.items,markup_pct:estDraft.markup_pct,tax_pct:estDraft.tax_pct,
+    notes:estDraft.notes,terms:estDraft.terms,updated_at:new Date().toISOString()};
+  const btn=document.getElementById('estSaveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    const row=await dbUpdate('deals',estDealId,{estimate});
+    const i=state.deals.findIndex(x=>x.id===estDealId);if(i>=0)state.deals[i]=row;
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Save Estimate';}
+    alert('Could not save estimate: '+(e.message||e));
+  }
+}
+function viewQuote(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  if(!d){return;}
+  const e=d.estimate;
+  if(!e||!e.items||!e.items.length){alert('Build the estimate first.');return;}
+  const c=contact(d.contact_id),s=state.settings||{},calc=computeEstimate(e);
+  const markup=Number(e.markup_pct||0)/100;
+  const rows=e.items.map(it=>{
+    const unit=Number(it.unit_price||0)*(1+markup);
+    const line=Number(it.qty||0)*unit;
+    return `<tr><td>${esc(it.desc||'')}</td><td class="r">${esc(String(it.qty||0))}</td>`+
+      `<td class="r">${money(unit)}</td><td class="r">${money(line)}</td></tr>`;
+  }).join('');
+  const bizsub=[s.business_phone,s.business_license?'Lic. '+s.business_license:'']
+    .filter(Boolean).join('   ·   ');
+  const html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'+
+  '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+  '<title>Estimate — '+esc(d.title)+'</title><style>'+
+  '*{box-sizing:border-box;margin:0;padding:0;}'+
+  'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;color:#1e293b;background:#f1f5f9;padding:24px;}'+
+  '.sheet{max-width:760px;margin:0 auto;background:#fff;padding:40px 44px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);}'+
+  '.qhead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1f3a5f;padding-bottom:16px;}'+
+  '.biz{font-size:22px;font-weight:800;color:#1f3a5f;}'+
+  '.bizsub{font-size:12px;color:var(--muted);margin-top:4px;}'+
+  '.qmeta{text-align:right;font-size:12px;color:var(--muted);}'+
+  '.qmeta .qt{font-size:20px;font-weight:800;color:#1f3a5f;letter-spacing:1.5px;margin-bottom:3px;}'+
+  '.qto{margin:22px 0 6px;font-size:13px;line-height:1.6;}'+
+  '.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;}'+
+  'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;}'+
+  'th{background:#1f3a5f;color:#fff;text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}'+
+  'td{padding:9px 12px;border-bottom:1px solid #e2e8f0;}'+
+  'td.r,th.r{text-align:right;}'+
+  '.totals{margin-left:auto;width:270px;margin-top:14px;font-size:13px;}'+
+  '.totals .row{display:flex;justify-content:space-between;padding:5px 0;}'+
+  '.totals .grand{border-top:2px solid #1f3a5f;margin-top:5px;padding-top:9px;font-weight:800;font-size:17px;color:#1f3a5f;}'+
+  '.qnote{margin-top:22px;font-size:12px;color:#475569;line-height:1.6;}'+
+  '.printbtn{display:block;margin:0 auto 18px;background:#2563eb;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;}'+
+  '@media print{body{background:#fff;padding:0;}.sheet{box-shadow:none;border-radius:0;max-width:none;padding:24px;}.printbtn{display:none;}}'+
+  '</style></head><body>'+
+  '<button class="printbtn" onclick="window.print()">Print / Save as PDF</button>'+
+  '<div class="sheet"><div class="qhead">'+
+  '<div><div class="biz">'+esc(s.business_name||'Your Company')+'</div>'+
+  (bizsub?'<div class="bizsub">'+esc(bizsub)+'</div>':'')+'</div>'+
+  '<div class="qmeta"><div class="qt">ESTIMATE</div><div>'+esc(fmtDate(todayStr()))+'</div>'+
+  '<div>Ref: '+esc((d.id||'').slice(0,8).toUpperCase())+'</div></div></div>'+
+  '<div class="qto"><div class="lbl">Prepared for</div>'+
+  '<div style="font-weight:700;font-size:15px;margin-top:3px">'+esc(c?c.name:'')+'</div>'+
+  '<div>'+esc([c&&c.phone,c&&c.email].filter(Boolean).join('   ·   '))+'</div>'+
+  (d.job_address?'<div>'+esc(d.job_address)+'</div>':'')+
+  '<div style="margin-top:7px"><span class="lbl">Project</span>&nbsp;&nbsp;'+esc(d.title)+'</div></div>'+
+  '<table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>'+
+  '<th class="r">Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+  '<div class="totals"><div class="row"><span>Subtotal</span><span>'+money(calc.subtotal)+'</span></div>'+
+  (e.tax_pct?'<div class="row"><span>Tax ('+e.tax_pct+'%)</span><span>'+money(calc.tax)+'</span></div>':'')+
+  '<div class="row grand"><span>Total</span><span>'+money(calc.total)+'</span></div></div>'+
+  (e.notes?'<div class="qnote"><div class="lbl">Notes</div><div>'+esc(e.notes)+'</div></div>':'')+
+  (e.terms?'<div class="qnote"><div class="lbl">Terms</div><div>'+esc(e.terms)+'</div></div>':'')+
+  '<div class="qnote" style="margin-top:26px;border-top:1px solid var(--border);padding-top:14px;color:var(--muted)">'+
+  'This estimate is valid for 30 days. Thank you for the opportunity to earn your business.</div>'+
+  '</div></body></html>';
+  const w=window.open('','_blank');
+  if(!w){alert('Please allow pop-ups to open the quote.');return;}
+  w.document.write(html);w.document.close();
+}
+
+/* ============================ REVIEWS ============================ */
+let reviewFilter='All';
+function reviewStatusBadge(s){
+  const cls={scheduled:'b-gray',sent:'b-amber',followed_up:'b-amber',completed:'b-green',
+    failed:'b-red',opted_out:'b-gray'};
+  const lbl={scheduled:'Scheduled',sent:'Sent',followed_up:'Followed up',
+    completed:'Review received',failed:'Failed',opted_out:'Opted out'};
+  return `<span class="badge ${cls[s]||'b-gray'}">${lbl[s]||esc(s||'—')}</span>`;
+}
+function reviewVelocity(){
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now=new Date(),months=[];
+  for(let i=5;i>=0;i--){
+    const dt=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({key:dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'),
+      label:M[dt.getMonth()],count:0});
+  }
+  state.review_requests.forEach(r=>{
+    if(!['sent','followed_up','completed'].includes(r.status))return;
+    const d=r.sent_at||r.created_at;if(!d)return;
+    const m=months.find(x=>x.key===String(d).slice(0,7));
+    if(m)m.count++;
+  });
+  return months;
+}
+function viewReviews(){
+  const all=[...state.review_requests];
+  const sentish=all.filter(r=>['sent','followed_up','completed'].includes(r.status));
+  const received=all.filter(r=>r.status==='completed').length;
+  const scheduled=all.filter(r=>r.status==='scheduled').length;
+  const failed=all.filter(r=>r.status==='failed').length;
+  const conv=sentish.length?Math.round(received/sentish.length*100):0;
+  const vel=reviewVelocity();
+  const maxV=Math.max(1,...vel.map(m=>m.count));
+  let list=all;
+  if(reviewFilter==='Scheduled')list=all.filter(r=>r.status==='scheduled');
+  else if(reviewFilter==='Sent')list=all.filter(r=>r.status==='sent'||r.status==='followed_up');
+  else if(reviewFilter==='Received')list=all.filter(r=>r.status==='completed');
+  else if(reviewFilter==='Failed')list=all.filter(r=>r.status==='failed');
+  list=list.slice().sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  return `
+  <div class="view-head">
+    <div><h1>Reviews</h1><p>${sentish.length} requests sent · ${received} reviews received · ${conv}% conversion</p></div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="label">Requests Sent</div><div class="value blue">${sentish.length}</div>
+      <div class="sub">texted to customers</div></div>
+    <div class="stat"><div class="label">Reviews Received</div><div class="value green">${received}</div>
+      <div class="sub">marked by you</div></div>
+    <div class="stat"><div class="label">Conversion Rate</div><div class="value">${conv}%</div>
+      <div class="sub">received ÷ sent</div></div>
+    <div class="stat"><div class="label">Scheduled</div><div class="value amber">${scheduled}</div>
+      <div class="sub">waiting to send</div></div>
+    <div class="stat"><div class="label">Failed</div><div class="value ${failed?'red':''}">${failed}</div>
+      <div class="sub">${failed?'need attention':'none'}</div></div>
+  </div>
+  <div class="panel" style="margin-bottom:22px">
+    <h3>Requests Sent — Last 6 Months</h3>
+    ${vel.map(m=>`<div class="bar-row">
+      <div class="bl">${m.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${m.count/maxV*100}%"></div></div>
+      <div class="bv">${m.count}</div></div>`).join('')}
+  </div>
+  <div class="toolbar">
+    <select class="filter" onchange="reviewFilter=this.value;render()">
+      ${['All','Scheduled','Sent','Received','Failed'].map(o=>`<option ${o===reviewFilter?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap">${list.length?`<table><thead><tr>
+    <th>Customer</th><th>Job</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody>
+    ${list.map(r=>{
+      const d=r.deal_id?state.deals.find(x=>x.id===r.deal_id):null;
+      const dt=r.status==='scheduled'?('Scheduled '+fmtDate(r.scheduled_for)):fmtDate(r.sent_at||r.created_at);
+      const canMark=(r.status==='sent'||r.status==='followed_up');
+      return `<tr>
+        <td>${r.contact_id?`<span class="name-link" onclick="openContactDetail('${r.contact_id}')">${esc(contactName(r.contact_id))}</span>`:'—'}</td>
+        <td>${d?esc(d.title):'—'}</td>
+        <td>${reviewStatusBadge(r.status)}</td>
+        <td><span style="color:var(--muted);font-size:12.5px">${dt}</span></td>
+        <td><div class="row-actions">
+          ${canMark?`<button class="btn sm" onclick="markReviewReceived('${r.id}')">★ Mark received</button>`:''}
+          <button class="icon-btn" onclick="deleteReviewRequest('${r.id}')">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody></table>`:
+    `<div class="empty"><div class="big">⭐</div>No review requests yet.<br>
+      Mark a job Completed (the engine schedules one automatically), or use "Request a review" on a job or contact.</div>`}</div>`;
+}
+async function markReviewReceived(id){
+  const r=state.review_requests.find(x=>x.id===id);
+  if(!r)return;
+  try{
+    const row=await dbUpdate('review_requests',id,{status:'completed'});
+    Object.assign(r,row);render();
+  }catch(e){alert('Could not update: '+(e.message||e));}
+}
+async function deleteReviewRequest(id){
+  if(!confirm('Delete this review request?'))return;
+  try{
+    await dbDelete('review_requests',id);
+    state.review_requests=state.review_requests.filter(x=>x.id!==id);
+    render();
+  }catch(e){alert('Could not delete: '+(e.message||e));}
+}
+
+/* ======================== JOB WORKSPACE ======================== */
+async function openJobWorkspace(id){
+  currentJobId=id;currentView='jobspace';buildNav();render();window.scrollTo(0,0);
+  await loadPhotoUrls(id);
+  if(currentView==='jobspace'&&currentJobId===id)render();
+}
+function jobChecklist(d){
+  const m=state.roof_measurements.find(x=>x.deal_id===d.id);
+  const est=d.estimate, ms=d.material_selections;
+  return [
+    {label:'Inspection report',done:!!(d.inspection&&d.inspection.completed)},
+    {label:'Photos',done:state.job_photos.some(p=>p.deal_id===d.id)},
+    {label:'Measurement & material order',done:!!(m&&m.material_order)},
+    {label:'Signed estimate',done:!!(est&&est.items&&est.items.length&&est.signed)},
+    {label:'Material selections',done:!!(ms&&ms.completed)},
+  ];
+}
+function buildReady(d){return jobChecklist(d).every(s=>s.done);}
+function missingItems(d){return jobChecklist(d).filter(s=>!s.done).map(s=>s.label.toLowerCase());}
+function inspectionSummary(insp){
+  const parts=[];
+  if(insp.condition)parts.push('Condition: '+insp.condition);
+  if(insp.material)parts.push(insp.material);
+  if(insp.layers)parts.push(insp.layers+' layer'+(insp.layers==='1'?'':'s'));
+  if(insp.age)parts.push(insp.age+' yrs old');
+  const dmg=(insp.damage||[]).join(', ');
+  return `<div class="mi-sub">${esc(parts.join('  ·  '))||'Inspection recorded.'}</div>`+
+    (dmg?`<div class="mi-sub">Damage: ${esc(dmg)}</div>`:'')+
+    (insp.notes?`<div class="mi-sub" style="margin-top:4px">${esc(insp.notes)}</div>`:'');
+}
+function viewJobWorkspace(){
+  const d=state.deals.find(x=>x.id===currentJobId);
+  if(!d)return `<div class="view-head"><div><h1>Job not found</h1></div></div>
+    <button class="btn secondary" onclick="go('pipeline')">← Back to Pipeline</button>`;
+  const c=contact(d.contact_id);
+  const ck=jobChecklist(d);
+  const doneCount=ck.filter(s=>s.done).length;
+  const ready=doneCount===ck.length;
+  const missing=ck.filter(s=>!s.done).map(s=>s.label.toLowerCase());
+  const insp=d.inspection||null;
+  const m=state.roof_measurements.find(x=>x.deal_id===d.id);
+  const est=d.estimate, hasEst=!!(est&&est.items&&est.items.length);
+  const ms=d.material_selections;
+  const acts=state.activities.filter(a=>a.contact_id===d.contact_id)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,4);
+  const calls=state.calls.filter(k=>k.contact_id===d.contact_id)
+    .sort((a,b)=>(b.occurred_at||'').localeCompare(a.occurred_at||'')).slice(0,4);
+  return `
+  <div class="view-head">
+    <div>
+      <span class="ws-back" onclick="go('pipeline')">← Pipeline</span>
+      <h1>${esc(d.title)}</h1>
+      <p>${c?esc(c.name):'—'} · ${esc(d.stage)} · ${money(d.value)}${d.job_address?' · '+esc(d.job_address):''} · Rep: ${esc(memberName(d.assigned_to))}</p>
+    </div>
+    <button class="btn secondary" onclick="openDealForm('${d.id}')">Edit Job</button>
+  </div>
+  <div class="panel" style="margin-bottom:18px">
+    <h3>Back-Office Check ${ready?'<span class="badge b-green">Build-ready</span>':
+      '<span class="badge b-red">Incomplete · '+doneCount+'/'+ck.length+'</span>'}</h3>
+    ${ck.map(s=>`<div class="ck-row">
+      <span class="ck-mark ${s.done?'done':'todo'}">${s.done?'✓':'!'}</span>
+      <span class="ck-label ${s.done?'':'pending'}">${esc(s.label)}</span>
+    </div>`).join('')}
+    <div style="font-size:12.5px;margin-top:11px;font-weight:600;color:${ready?'var(--green)':'var(--amber)'}">
+      ${ready?'✓ This job is build-ready — it can move to the Build stage.'
+        :'⚠ This lead is incomplete. Before it can move to Build it still needs: '+esc(missing.join(', '))+'.'}
+    </div>
+  </div>
+  <div class="panel-grid">
+    <div class="panel">
+      <h3>Inspection Report ${insp&&insp.completed?'<span class="badge b-green">Done</span>':
+        '<span class="badge b-gray">Not started</span>'}</h3>
+      ${insp&&insp.completed?inspectionSummary(insp)
+        :'<div class="mi-sub">No inspection yet — capture the roof condition, damage, and notes.</div>'}
+      <button class="btn sm ${insp&&insp.completed?'secondary':''}" style="margin-top:12px"
+        onclick="openInspectionForm('${d.id}')">${insp&&insp.completed?'Edit inspection':'Start inspection'}</button>
+    </div>
+    <div class="panel">
+      <h3>Measurement & Materials ${m&&m.material_order?'<span class="badge b-green">Done</span>':
+        '<span class="badge b-gray">Not started</span>'}</h3>
+      ${m&&m.material_order?`<div class="mi-sub">${m.total_squares||0} squares · material order generated</div>`
+        :'<div class="mi-sub">No measurement or material order yet.</div>'}
+      <button class="btn sm ${m?'secondary':''}" style="margin-top:12px"
+        onclick="openMaterialOrder('${d.id}')">${m?'View / edit':'Measure & build order'}</button>
+    </div>
+    <div class="panel">
+      <h3>Estimate ${hasEst?(est.signed
+        ?'<span class="badge b-green">Signed · '+money(estimateTotal(est))+'</span>'
+        :'<span class="badge b-amber">'+money(estimateTotal(est))+' · unsigned</span>')
+        :'<span class="badge b-gray">Not started</span>'}</h3>
+      ${hasEst?`<div class="mi-sub">${est.items.length} line items · total ${money(estimateTotal(est))}</div>`
+        :'<div class="mi-sub">No estimate yet — build the customer quote.</div>'}
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm ${hasEst?'secondary':''}" onclick="openEstimateBuilder('${d.id}')">${hasEst?'Edit':'Build estimate'}</button>
+        ${hasEst?`<button class="btn sm secondary" onclick="viewQuote('${d.id}')">View quote ↗</button>`:''}
+        ${hasEst?`<button class="btn sm ${est.signed?'secondary':''}" onclick="toggleEstimateSigned('${d.id}')">${est.signed?'Mark unsigned':'Mark signed ✓'}</button>`:''}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Material Selections ${ms&&ms.completed?'<span class="badge b-green">Done</span>':
+        '<span class="badge b-gray">Not started</span>'}</h3>
+      ${ms&&(ms.brand||ms.color)
+        ?`<div class="mi-sub">${esc([ms.brand,ms.product_line,ms.color].filter(Boolean).join(' · '))}</div>
+          <div class="mi-sub">Underlayment: ${esc(ms.underlayment||'—')}</div>`
+        :'<div class="mi-sub">No selections yet — shingle/tile brand, type, color, underlayment.</div>'}
+      <button class="btn sm ${ms&&ms.completed?'secondary':''}" style="margin-top:12px"
+        onclick="openMaterialSelections('${d.id}')">${ms&&ms.completed?'Edit selections':'Add selections'}</button>
+    </div>
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Photos ${state.job_photos.filter(p=>p.deal_id===d.id).length
+        ?'<span class="badge b-green">'+state.job_photos.filter(p=>p.deal_id===d.id).length+'</span>'
+        :'<span class="badge b-gray">None</span>'}</h3>
+      ${photoGalleryHTML(d)}
+    </div>
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Communications
+        <span class="count">
+          <button class="btn sm secondary" onclick="openCallForm()">+ Call</button>
+          <button class="btn sm secondary" onclick="openActivityForm('','${d.contact_id||''}')">+ Activity</button>
+        </span></h3>
+      ${(calls.length||acts.length)?
+        calls.map(k=>`<div class="mini-item"><div class="mi-top">
+          <span>${k.channel==='SMS'?'💬':'📞'} ${esc(k.ai_summary||k.transcript||k.direction)}</span>
+          <span class="badge ${k.status==='missed'?'b-red':'b-gray'}">${esc(k.status||'')}</span></div>
+          <div class="mi-sub">${fmtDate(k.occurred_at)}</div></div>`).join('')+
+        acts.map(a=>`<div class="mini-item"><div class="mi-top">
+          <span>${ACT_ICON[a.type]||''} ${esc(a.summary)}</span><span class="badge b-gray">${a.type}</span></div>
+          <div class="mi-sub">${fmtDate(a.date)}</div></div>`).join('')
+        :'<div class="mi-sub">No calls or activity logged for this customer yet.</div>'}
+    </div>
+  </div>`;
+}
+function openInspectionForm(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  const i=(d&&d.inspection)||{};
+  const dmg=i.damage||[];
+  openModal(`
+  <div class="modal-head"><h2>Inspection Report</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field-row">
+      <div class="field"><label>Roof condition</label>
+        <select id="i_cond">${opts(['Good','Fair','Poor'],i.condition||'Fair')}</select></div>
+      <div class="field"><label>Roof material</label>
+        <select id="i_mat">${opts(['Asphalt Shingle','Metal','Tile','Flat / Low-slope','Wood Shake','Other'],i.material||'Asphalt Shingle')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Approx. age (years)</label>
+        <input type="number" id="i_age" min="0" value="${i.age!=null?i.age:''}"></div>
+      <div class="field"><label>Layers</label>
+        <select id="i_layers">${opts(['1','2','3+'],i.layers||'1')}</select></div>
+      <div class="field"><label>Stories</label>
+        <select id="i_stories">${opts(['1','2','3'],i.stories||'1')}</select></div>
+    </div>
+    <div class="field"><label>Decking condition</label>
+      <select id="i_deck">${opts(['Good','Minor repair needed','Major repair needed'],i.decking||'Good')}</select></div>
+    <div class="field"><label>Damage observed</label>
+      <div style="display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:5px">
+        ${['Hail','Wind','Age & wear','Leak','Missing shingles','Storm','Other'].map(x=>`
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:13px;color:var(--text)">
+            <input type="checkbox" class="i_dmg" value="${x}" ${dmg.includes(x)?'checked':''}
+              style="width:16px;height:16px">${x}</label>`).join('')}
+      </div></div>
+    <div class="field"><label>Notes</label>
+      <textarea id="i_notes" rows="3">${esc(i.notes||'')}</textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="inspBtn" onclick="saveInspection('${dealId}')">Save Inspection</button>
+  </div>`);
+}
+async function saveInspection(dealId){
+  const dmg=[...document.querySelectorAll('.i_dmg:checked')].map(x=>x.value);
+  const inspection={
+    condition:val('i_cond'),material:val('i_mat'),age:num('i_age')||null,
+    layers:val('i_layers'),stories:val('i_stories'),decking:val('i_deck'),
+    damage:dmg,notes:val('i_notes'),inspected_on:todayStr(),completed:true,
+  };
+  const btn=document.getElementById('inspBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    const row=await dbUpdate('deals',dealId,{inspection});
+    const i=state.deals.findIndex(x=>x.id===dealId);if(i>=0)state.deals[i]=row;
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Save Inspection';}
+    alert('Could not save inspection: '+(e.message||e));
+  }
+}
+function toggleEstimateSigned(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  if(!d||!d.estimate)return;
+  const signing=!d.estimate.signed;
+  const estimate={...d.estimate,signed:signing};
+  // Signing is the moment the job's value stops being a guess. Without this
+  // the pipeline reports one number and the signed quote says another.
+  const patch=signing?{estimate,value:estimateTotal(estimate)}:{estimate};
+  dbUpdate('deals',dealId,patch).then(row=>{
+    const i=state.deals.findIndex(x=>x.id===dealId);if(i>=0)state.deals[i]=row;
+    render();
+  }).catch(e=>alert('Could not update: '+(e.message||e)));
+}
+function openMaterialSelections(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  const ms=(d&&d.material_selections)||{};
+  openModal(`
+  <div class="modal-head"><h2>Material Selections</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Roofing product</label>
+      <select id="ms_type">${opts(['Asphalt Shingle','Metal','Tile','Flat / Low-slope','Other'],ms.product_type||'Asphalt Shingle')}</select></div>
+    <div class="field-row">
+      <div class="field"><label>Manufacturer / brand</label>
+        <input type="text" id="ms_brand" value="${esc(ms.brand||'')}" placeholder="e.g. GAF, Owens Corning"></div>
+      <div class="field"><label>Product line / type</label>
+        <input type="text" id="ms_line" value="${esc(ms.product_line||'')}" placeholder="e.g. Timberline HDZ, architectural"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Color</label>
+        <input type="text" id="ms_color" value="${esc(ms.color||'')}" placeholder="e.g. Weathered Wood"></div>
+      <div class="field"><label>Underlayment</label>
+        <select id="ms_under">${opts(['Synthetic','Felt 15#','Felt 30#','Peel & stick','Other'],ms.underlayment||'Synthetic')}</select></div>
+    </div>
+    <div class="field"><label>Notes</label>
+      <textarea id="ms_notes" rows="2">${esc(ms.notes||'')}</textarea></div>
+    <div style="font-size:11.5px;color:var(--muted)">Brand, color, and underlayment are needed for this step to count as complete.</div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="msBtn" onclick="saveMaterialSelections('${dealId}')">Save Selections</button>
+  </div>`);
+}
+async function saveMaterialSelections(dealId){
+  const ms={
+    product_type:val('ms_type'),brand:val('ms_brand'),product_line:val('ms_line'),
+    color:val('ms_color'),underlayment:val('ms_under'),notes:val('ms_notes'),
+  };
+  ms.completed=!!(ms.brand&&ms.color&&ms.underlayment);
+  const btn=document.getElementById('msBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    const row=await dbUpdate('deals',dealId,{material_selections:ms});
+    const i=state.deals.findIndex(x=>x.id===dealId);if(i>=0)state.deals[i]=row;
+    closeModal();render();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Save Selections';}
+    alert('Could not save selections: '+(e.message||e));
+  }
+}
+
+/* ---- job photos ---- */
+const photoUrlCache={};
+async function loadPhotoUrls(jobId){
+  const need=state.job_photos.filter(p=>p.deal_id===jobId&&!photoUrlCache[p.id]);
+  if(!need.length)return;
+  try{
+    const {data,error}=await sb.storage.from('job-photos')
+      .createSignedUrls(need.map(p=>p.storage_path),28800);
+    if(error)throw error;
+    (data||[]).forEach((res,idx)=>{if(res&&res.signedUrl)photoUrlCache[need[idx].id]=res.signedUrl;});
+  }catch(e){console.error('Photo URL load failed:',e);}
+}
+function photoGalleryHTML(d){
+  const photos=state.job_photos.filter(p=>p.deal_id===d.id)
+    .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  return `<div class="photo-grid">
+    ${photos.map(p=>{
+      const url=photoUrlCache[p.id];
+      return `<div class="photo-tile">
+        ${url?`<img src="${esc(url)}" loading="lazy" onclick="window.open('${esc(url)}','_blank')">`
+             :`<div class="photo-loading">Loading…</div>`}
+        <button class="photo-del" title="Delete photo" onclick="deletePhoto('${p.id}')">✕</button>
+      </div>`;
+    }).join('')}
+    <label class="photo-add">
+      <input type="file" accept="image/*" multiple style="display:none"
+        onchange="uploadPhotos('${d.id}',this.files)">
+      <span>+ Add<br>photos</span>
+    </label>
+  </div>${photos.length?'':'<div class="mi-sub" style="margin-top:8px">No photos yet — add inspection or job-site photos.</div>'}`;
+}
+async function uploadPhotos(dealId,fileList){
+  const files=[...(fileList||[])].filter(f=>f.type&&f.type.startsWith('image/'));
+  if(!files.length){alert('Please choose image files.');return;}
+  showLoading(true);
+  let ok=0;
+  for(const f of files){
+    const ext=((f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,''))||'jpg';
+    const path=currentUser.id+'/'+dealId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+    try{
+      const up=await sb.storage.from('job-photos').upload(path,f,{contentType:f.type});
+      if(up.error)throw up.error;
+      const row=await dbInsert('job_photos',{deal_id:dealId,storage_path:path,caption:f.name});
+      state.job_photos.push(row);ok++;
+    }catch(e){console.error('Upload failed:',e);}
+  }
+  await loadPhotoUrls(dealId);
+  showLoading(false);
+  if(ok<files.length)alert(ok?'Some photos could not be uploaded — please retry.':'Photos could not be uploaded. Check your connection and try again.');
+  render();
+}
+async function deletePhoto(id){
+  const p=state.job_photos.find(x=>x.id===id);
+  if(!p||!confirm('Delete this photo?'))return;
+  try{
+    await sb.storage.from('job-photos').remove([p.storage_path]);
+    await dbDelete('job_photos',id);
+    state.job_photos=state.job_photos.filter(x=>x.id!==id);
+    delete photoUrlCache[id];
+    render();
+  }catch(e){alert('Could not delete photo: '+(e.message||e));}
+}
+
+/* ======================== MATERIAL ORDERS ======================== */
+function measurementFor(dealId){
+  return state.roof_measurements.find(m=>m.deal_id===dealId)||null;
+}
+function num(id){const e=document.getElementById(id);return e?Number(e.value||0):0;}
+function wastePct(){
+  return (state.settings&&state.settings.waste_factor_pct!=null)?state.settings.waste_factor_pct:15;
+}
+function computeMaterialOrder(m,wp){
+  const sq=Number(m.total_squares||0),ridge=Number(m.ridge_lf||0),hip=Number(m.hip_lf||0),
+    valley=Number(m.valley_lf||0),eave=Number(m.eave_lf||0),rake=Number(m.rake_lf||0);
+  const waste=Number(wp||15)/100, adjSq=sq*(1+waste), capLf=ridge+hip;
+  const items=[
+    {material:'Field shingles',detail:adjSq.toFixed(1)+' sq incl. '+Math.round(waste*100)+'% waste',
+      qty:Math.ceil(adjSq*3),unit:'bundles'},
+    {material:'Starter strip',detail:(eave+rake).toFixed(0)+' lf (eaves + rakes)',
+      qty:Math.ceil((eave+rake)/100),unit:'bundles'},
+    {material:'Hip & ridge cap',detail:capLf.toFixed(0)+' lf (ridge + hip)',
+      qty:Math.ceil(capLf/25),unit:'bundles'},
+    {material:'Underlayment (synthetic)',detail:sq.toFixed(1)+' sq of roof area',
+      qty:Math.ceil(sq/10),unit:'rolls'},
+    {material:'Ice & water shield',detail:(eave+valley).toFixed(0)+' lf (eaves + valleys)',
+      qty:Math.ceil((eave+valley)/65),unit:'rolls'},
+    {material:'Drip edge',detail:(eave+rake).toFixed(0)+' lf (eaves + rakes)',
+      qty:Math.ceil((eave+rake)/10),unit:'10-ft pieces'},
+    {material:'Valley metal',detail:valley.toFixed(0)+' lf (open valleys)',
+      qty:Math.ceil(valley/10),unit:'10-ft pieces'},
+    {material:'Roofing nails',detail:'about 2.5 lb per square',
+      qty:Math.ceil(sq*2.5),unit:'lb'},
+    {material:'Ridge vent',detail:ridge.toFixed(0)+' lf of ridge (if vented)',
+      qty:Math.ceil(ridge/4),unit:'4-ft pieces'},
+    {material:'Pipe boots & step flashing',detail:'Not derived from measurements — verify on site',
+      qty:null,unit:'—'},
+  ];
+  return {waste_pct:Math.round(waste*100),adjusted_squares:Number(adjSq.toFixed(1)),items};
+}
+function materialTableHTML(order){
+  if(!order||!order.items||!order.adjusted_squares)
+    return `<div class="empty" style="padding:26px"><div class="mi-sub">Enter the roof measurements above to generate the material order.</div></div>`;
+  return `<table><thead><tr><th>Material</th><th>Basis</th><th>Quantity</th></tr></thead><tbody>
+    ${order.items.map(it=>`<tr>
+      <td style="font-weight:600">${esc(it.material)}</td>
+      <td><span style="color:var(--muted);font-size:12px">${esc(it.detail)}</span></td>
+      <td>${it.qty==null?'<span style="color:var(--muted)">verify</span>':('<strong>'+it.qty+'</strong> '+esc(it.unit))}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+function readMeasurementInputs(){
+  return {
+    total_squares:num('mo_sq'),predominant_pitch:val('mo_pitch'),
+    ridge_lf:num('mo_ridge'),hip_lf:num('mo_hip'),valley_lf:num('mo_valley'),
+    eave_lf:num('mo_eave'),rake_lf:num('mo_rake'),facet_count:num('mo_facets'),
+  };
+}
+function refreshMaterialPreview(){
+  const el=document.getElementById('mo_result');
+  if(el)el.innerHTML=materialTableHTML(computeMaterialOrder(readMeasurementInputs(),wastePct()));
+}
+function openMaterialOrder(dealId){
+  const d=state.deals.find(x=>x.id===dealId);
+  if(!d){alert('Job not found.');return;}
+  const m=measurementFor(dealId)||{};
+  openModal(`
+  <div class="modal-head"><h2>Material Order — ${esc(d.title)}</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
+      Enter the roof measurements below — once a measurement provider is connected they fill in
+      automatically. The material order recalculates as you type, using your ${wastePct()}% waste factor from Settings.</div>
+    <div class="field-row">
+      <div class="field"><label>Total squares</label>
+        <input type="number" id="mo_sq" min="0" step="0.1" value="${m.total_squares!=null?m.total_squares:''}" oninput="refreshMaterialPreview()"></div>
+      <div class="field"><label>Predominant pitch</label>
+        <input type="text" id="mo_pitch" value="${esc(m.predominant_pitch||'')}" placeholder="e.g. 6/12"></div>
+      <div class="field"><label>Facet count</label>
+        <input type="number" id="mo_facets" min="0" value="${m.facet_count!=null?m.facet_count:''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Ridge (lf)</label>
+        <input type="number" id="mo_ridge" min="0" value="${m.ridge_lf!=null?m.ridge_lf:''}" oninput="refreshMaterialPreview()"></div>
+      <div class="field"><label>Hip (lf)</label>
+        <input type="number" id="mo_hip" min="0" value="${m.hip_lf!=null?m.hip_lf:''}" oninput="refreshMaterialPreview()"></div>
+      <div class="field"><label>Valley (lf)</label>
+        <input type="number" id="mo_valley" min="0" value="${m.valley_lf!=null?m.valley_lf:''}" oninput="refreshMaterialPreview()"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Eave (lf)</label>
+        <input type="number" id="mo_eave" min="0" value="${m.eave_lf!=null?m.eave_lf:''}" oninput="refreshMaterialPreview()"></div>
+      <div class="field"><label>Rake (lf)</label>
+        <input type="number" id="mo_rake" min="0" value="${m.rake_lf!=null?m.rake_lf:''}" oninput="refreshMaterialPreview()"></div>
+      <div class="field"></div>
+    </div>
+    <h3 style="font-size:14px;margin:6px 0 8px;color:var(--text)">Material Order</h3>
+    <div class="table-wrap" id="mo_result">${materialTableHTML(m.material_order)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">
+      This is an estimate for quoting and ordering. Verify flashing, boots, and penetration counts on
+      site before placing the final supplier order.</div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="moSaveBtn" onclick="saveMaterialOrder('${dealId}')">Save to Job</button>
+  </div>`,true);
+  refreshMaterialPreview();
+}
+async function saveMaterialOrder(dealId){
+  const m=readMeasurementInputs();
+  if(!m.total_squares){alert('Enter the total squares first.');return;}
+  const order=computeMaterialOrder(m,wastePct());
+  const row={
+    deal_id:dealId,provider:'manual',status:'manual',
+    total_squares:m.total_squares||null,predominant_pitch:m.predominant_pitch||null,
+    ridge_lf:m.ridge_lf||null,hip_lf:m.hip_lf||null,valley_lf:m.valley_lf||null,
+    eave_lf:m.eave_lf||null,rake_lf:m.rake_lf||null,facet_count:m.facet_count||null,
+    material_order:order,measured_at:new Date().toISOString(),
+  };
+  const btn=document.getElementById('moSaveBtn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    const {data,error}=await sb.from('roof_measurements')
+      .upsert(row,{onConflict:'deal_id'}).select().single();
+    if(error)throw error;
+    const i=state.roof_measurements.findIndex(x=>x.deal_id===dealId);
+    if(i>=0)state.roof_measurements[i]=data; else state.roof_measurements.push(data);
+    closeModal();render();if(currentView==='pipeline')wireKanban();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Save to Job';}
+    alert('Could not save material order: '+(e.message||e));
+  }
+}
+
+/* ==================== SUPPORT BOT — NOTIFICATIONS ==================== */
+// Reconcile in-app reminders: every sold job that isn't build-ready gets a
+// notification for its assigned rep and the company's admins. When a job
+// becomes ready (or leaves "Won"), its reminders are cleared.
+async function reconcileNotifications(){
+  if(!currentCompany)return;
+  const adminIds=state.members.filter(m=>m.role==='owner'||m.role==='admin').map(m=>m.user_id);
+  const desired=[];
+  state.deals.filter(d=>d.stage==='Won'&&!buildReady(d)).forEach(d=>{
+    const recips=new Set(adminIds);
+    if(d.assigned_to)recips.add(d.assigned_to);
+    recips.forEach(uid=>{ if(uid) desired.push({deal:d,user_id:uid}); });
+  });
+  const k=(dl,u)=>dl+'|'+u;
+  const wantSet=new Set(desired.map(x=>k(x.deal.id,x.user_id)));
+  const existing=state.notifications.filter(n=>n.type==='job_incomplete');
+  const haveSet=new Set(existing.map(n=>k(n.deal_id,n.user_id)));
+  const toInsert=desired.filter(x=>!haveSet.has(k(x.deal.id,x.user_id))).map(x=>{
+    const d=x.deal,c=contact(d.contact_id);
+    return {user_id:x.user_id,deal_id:d.id,type:'job_incomplete',
+      title:'Incomplete job — '+(d.title||'Untitled job'),
+      body:(c?c.name+' · ':'')+'still needs: '+missingItems(d).join(', ')
+        +'. Finish these before it can move to Build.'};
+  });
+  const toDelete=existing.filter(n=>!wantSet.has(k(n.deal_id,n.user_id))).map(n=>n.id);
+  let changed=false;
+  if(toInsert.length){
+    const {error}=await sb.from('notifications')
+      .upsert(toInsert,{onConflict:'deal_id,user_id,type',ignoreDuplicates:true});
+    if(!error)changed=true;
+  }
+  if(toDelete.length){
+    const {error}=await sb.from('notifications').delete().in('id',toDelete);
+    if(!error)changed=true;
+  }
+  if(changed){
+    const {data}=await sb.from('notifications').select('*').order('created_at',{ascending:false});
+    if(data)state.notifications=data;
+  }
+}
+
+/* ============================ NOTIFICATIONS ============================ */
+function viewInbox(){
+  const mine=state.notifications.filter(n=>currentUser&&n.user_id===currentUser.id)
+    .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const unread=mine.filter(n=>!n.read).length;
+  return `
+  <div class="view-head">
+    <div><h1>Notifications</h1><p>${mine.length} total · ${unread} unread</p></div>
+    ${unread?`<button class="btn secondary" onclick="markAllRead()">Mark all read</button>`:''}
+  </div>
+  <div class="table-wrap">${mine.length?mine.map(n=>`
+    <div style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);${n.read?'':'background:#eff6ff'}">
+      <span class="ck-mark ${n.read?'soon':'todo'}" style="margin-top:1px">${n.read?'✓':'!'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${esc(n.title)}</div>
+        ${n.body?`<div class="mi-sub">${esc(n.body)}</div>`:''}
+        <div class="mi-sub">${fmtDate(n.created_at)}</div>
+      </div>
+      <div class="row-actions" style="align-items:flex-start;flex-wrap:wrap">
+        ${n.deal_id?`<button class="btn sm secondary" onclick="openJobFromNotif('${n.deal_id}')">Open job</button>`:''}
+        ${n.read?'':`<button class="btn sm secondary" onclick="markNotif('${n.id}')">Mark read</button>`}
+      </div>
+    </div>`).join(''):
+    `<div class="empty"><div class="big">🔔</div>You're all caught up — no notifications.</div>`}</div>
+  <p style="color:var(--muted);font-size:11.5px;margin-top:12px">
+    The back-office support bot posts a reminder here when one of your sold jobs is still
+    missing a step. It clears itself once the job is complete.</p>`;
+}
+function openJobFromNotif(dealId){
+  if(!state.deals.find(x=>x.id===dealId)){alert('That job no longer exists.');return;}
+  openJobWorkspace(dealId);
+}
+async function markNotif(id){
+  const n=state.notifications.find(x=>x.id===id);if(!n)return;
+  n.read=true;buildNav();render();
+  try{await sb.from('notifications').update({read:true}).eq('id',id);}catch(_e){}
+}
+async function markAllRead(){
+  const ids=state.notifications.filter(n=>currentUser&&n.user_id===currentUser.id&&!n.read).map(n=>n.id);
+  if(!ids.length)return;
+  state.notifications.forEach(n=>{if(ids.indexOf(n.id)>=0)n.read=true;});
+  buildNav();render();
+  try{await sb.from('notifications').update({read:true}).in('id',ids);}catch(_e){}
+}
+
+/* ============================ TEAM ============================ */
+function viewTeam(){
+  const admin=isAdmin();
+  const members=[...state.members].sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  const invites=state.invitations||[];
+  return `
+  <div class="view-head">
+    <div><h1>Team</h1><p>${esc(currentCompany?currentCompany.name:'Your company')} · ${members.length} member${members.length===1?'':'s'}</p></div>
+    ${admin?`<button class="btn" onclick="openInviteForm()">+ Invite teammate</button>`:''}
+  </div>
+  <div class="table-wrap" style="margin-bottom:20px">
+    <table><thead><tr><th>Member</th><th>Role</th>${admin?'<th></th>':''}</tr></thead><tbody>
+    ${members.map(m=>{
+      const me=m.user_id===currentUser.id;
+      return `<tr>
+        <td><strong>${esc(m.display_name||m.email||'Teammate')}</strong>${me?' <span class="badge b-gray">you</span>':''}
+          ${m.display_name&&m.email?`<div class="mi-sub">${esc(m.email)}</div>`:''}</td>
+        <td>${(admin&&m.role!=='owner')
+          ? `<select onchange="changeRole('${m.user_id}',this.value)" style="max-width:130px">
+              ${['admin','rep'].map(r=>`<option value="${r}" ${m.role===r?'selected':''}>${roleLabel(r)}</option>`).join('')}</select>`
+          : `<span class="badge ${m.role==='owner'?'b-green':'b-gray'}">${roleLabel(m.role)}</span>`}</td>
+        ${admin?`<td><div class="row-actions">${(m.role!=='owner'&&!me)
+          ? `<button class="btn sm danger" onclick="removeMember('${m.user_id}')">Remove</button>`:''}</div></td>`:''}
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+  </div>
+  ${admin?`
+  <div class="panel">
+    <h3>Pending Invitations <span class="count">${invites.length}</span></h3>
+    ${invites.length?invites.map(iv=>`<div class="mini-item"><div class="mi-top">
+      <span>${esc(iv.email)} <span class="badge b-gray">${roleLabel(iv.role)}</span></span>
+      <button class="btn sm secondary" onclick="revokeInvite('${iv.id}')">Revoke</button></div>
+      <div class="mi-sub">Invited ${fmtDate(iv.created_at)} · they join by signing up with this email</div></div>`).join('')
+      :`<div class="mi-sub">No pending invitations. Invite a teammate and they join automatically when they sign up with that email.</div>`}
+  </div>`:''}
+  <div class="note-box" style="margin-top:20px">
+    <h3>How team access works</h3>
+    <div style="font-size:13px;color:#c3d3e8;line-height:1.7">
+      <strong>Owner</strong> — full control, including the team.<br>
+      <strong>Admin</strong> — manages the team, every job and customer, and company settings.<br>
+      <strong>Rep</strong> — works every job and customer; can't change company settings or the team.<br>
+      Everyone on the team shares the same customers, pipeline, jobs and reviews.
+    </div>
+  </div>`;
+}
+function openInviteForm(){
+  if(!isAdmin()){alert('Only owners and admins can invite teammates.');return;}
+  openModal(`
+  <div class="modal-head"><h2>Invite a Teammate</h2>
+    <button class="icon-btn" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Email address *</label>
+      <input type="email" id="inv_email" placeholder="teammate@example.com"></div>
+    <div class="field"><label>Role</label>
+      <select id="inv_role">
+        <option value="rep">Rep — works jobs and customers</option>
+        <option value="admin">Admin — also manages the team and settings</option>
+      </select></div>
+    <div style="font-size:11.5px;color:var(--muted)">They can sign up with this exact email and will join ${esc(currentCompany?currentCompany.name:'your company')} automatically. Send them the Ridgeline link and ask them to create an account.</div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn" id="invBtn" onclick="sendInvite()">Send Invite</button>
+  </div>`);
+}
+async function sendInvite(){
+  const email=val('inv_email'),role=val('inv_role');
+  if(!email){alert('Enter an email address.');return;}
+  const btn=document.getElementById('invBtn');if(btn){btn.disabled=true;btn.textContent='Inviting…';}
+  try{
+    const {error}=await sb.rpc('invite_member',{p_email:email,p_role:role});
+    if(error)throw error;
+    const {data}=await sb.from('invitations').select('*').eq('status','pending').order('created_at',{ascending:false});
+    state.invitations=data||[];
+    closeModal();render();
+    alert('Invite sent to '+email+'. Have them sign up with that email to join your team.');
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Send Invite';}
+    alert('Could not send invite: '+(e.message||e));
+  }
+}
+async function revokeInvite(id){
+  if(!confirm('Revoke this invitation? They will no longer be able to join with that email.'))return;
+  try{
+    const {error}=await sb.rpc('revoke_invitation',{p_id:id});
+    if(error)throw error;
+    state.invitations=state.invitations.filter(x=>x.id!==id);
+    render();
+  }catch(e){alert('Could not revoke: '+(e.message||e));}
+}
+async function changeRole(userId,role){
+  try{
+    const {error}=await sb.rpc('set_member_role',{p_user_id:userId,p_role:role});
+    if(error)throw error;
+    const m=state.members.find(x=>x.user_id===userId);if(m)m.role=role;
+    if(userId===currentUser.id)currentMembership=m;
+    buildNav();render();
+  }catch(e){alert('Could not change role: '+(e.message||e));render();}
+}
+async function removeMember(userId){
+  const m=state.members.find(x=>x.user_id===userId);
+  const nm=m?(m.display_name||m.email||'this teammate'):'this teammate';
+  if(!confirm('Remove '+nm+' from the team? They lose access immediately. Their jobs and notes stay with the company.'))return;
+  try{
+    const {error}=await sb.rpc('remove_member',{p_user_id:userId});
+    if(error)throw error;
+    state.members=state.members.filter(x=>x.user_id!==userId);
+    render();
+  }catch(e){alert('Could not remove teammate: '+(e.message||e));}
+}
+
+/* ==================== PLATFORM — SEO COMMAND ====================
+   Operator-only. Everything here spans all sites and sits outside the
+   multi-tenant boundary entirely. */
+function pctOf(a,b){ return b ? Math.round(a/b*1000)/10 : null; }
+function ago(ts){
+  if(!ts) return 'never';
+  const d = Math.round((Date.now()-new Date(ts))/86400000);
+  return d<=0 ? 'today' : d===1 ? 'yesterday' : d+' days ago';
+}
+
+function viewPlatformSEO(){
+  const v=document.getElementById('view');
+  if(!platformData){
+    v.innerHTML='<div class="view-head"><div><h1>SEO Command</h1>'
+      +'<p>Reading the estate\u2026</p></div></div>';
+    sb.rpc('platform_overview',{p_days:platformDays}).then(({data,error})=>{
+      if(error){
+        v.innerHTML='<div class="view-head"><div><h1>SEO Command</h1></div></div>'
+          +'<div class="panel"><div class="mi-sub">'+esc(error.message)+'</div></div>';
+        return;
+      }
+      platformData=data; renderPlatformSEO();
+    });
+    return;
+  }
+  renderPlatformSEO();
+}
+
+function renderPlatformSEO(){
+  const d=platformData, r=d.reviews||{}, f=d.funnel||{}, p=d.pipeline||{}, hlth=d.data_health||{};
+  const gap=Number(r.gap||0);
+  const pctToTarget = r.target ? Math.min(100, Math.round(r.current/r.target*100)) : 0;
+
+  const landing=(f.by_landing||[]).slice(0,10);
+  const maxSess=Math.max(1,...landing.map(x=>x.sessions||0));
+  const srcRows=(f.by_source||[]).slice(0,12);
+  const maxSrc=Math.max(1,...srcRows.map(x=>x.sessions||0));
+
+  document.getElementById('view').innerHTML=`
+  <div class="view-head">
+    <div><h1>SEO Command</h1>
+      <p>Every site you run. Only you can open this \u2014 it sits above the company layer.</p></div>
+    <div style="display:flex;gap:8px">
+      ${[7,30,90].map(n=>`<button class="btn ${n===platformDays?'':'secondary'}"
+        onclick="platformDays=${n};platformData=null;viewPlatformSEO()">${n}d</button>`).join('')}
+      <button class="btn secondary" onclick="platformData=null;viewPlatformSEO()">\u21bb</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;border-left:4px solid ${gap>0?'var(--amber)':'var(--green)'}">
+    <h3>The constraint \u2014 Google reviews</h3>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div style="font-size:34px;font-weight:800;color:var(--text)">${r.current==null?'\u2014':r.current}</div>
+      <div style="color:var(--muted);font-size:13px">of ${r.target||'\u2014'} needed for the third map-pack slot
+        ${gap>0?`\u00b7 <strong style="color:var(--amber)">${gap} to go</strong>`:'\u00b7 <strong style="color:var(--green)">target reached</strong>'}
+        \u00b7 last confirmed ${ago(r.as_of)}</div>
+    </div>
+    <div class="prog-track" style="margin-top:10px"><div class="prog-fill" style="width:${pctToTarget}%"></div></div>
+    <div class="mi-sub" style="margin-top:9px">Nothing on the site outranks this. Rankings follow reviews in the
+      local pack, not the other way round \u2014 and the last jump came from asking customers directly,
+      not from anything we changed on the page.</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="label">Sessions</div><div class="value blue">${f.sessions||0}</div>
+      <div class="sub">${f.views||0} page views</div></div>
+    <div class="stat"><div class="label">Leads</div><div class="value">${f.leads||0}</div>
+      <div class="sub">${pctOf(f.leads||0,f.sessions||0)==null?'\u2014':pctOf(f.leads||0,f.sessions||0)+'% of sessions'}</div></div>
+    <div class="stat"><div class="label">Inspections booked</div><div class="value amber">${f.booked||0}</div>
+      <div class="sub">${pctOf(f.booked||0,f.leads||0)==null?'\u2014':pctOf(f.booked||0,f.leads||0)+'% of leads'}</div></div>
+    <div class="stat"><div class="label">Sold</div><div class="value green">${money(f.sold_value||0)}</div>
+      <div class="sub">${f.sold||0} job${(f.sold||0)===1?'':'s'}</div></div>
+    <div class="stat"><div class="label">Open pipeline</div><div class="value">${money(p.open_value||0)}</div>
+      <div class="sub">${p.open_deals||0} still winnable</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px">
+    <h3>What the traffic is worth <span class="count">by landing page</span></h3>
+    ${landing.length?landing.map(x=>`
+      <div class="bar-row">
+        <div class="bl seo-path" title="${esc(x.path)}">${esc(x.path)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(x.sessions/maxSess*100)}%"></div></div>
+        <div class="bv seo-val">${x.sessions} sess \u00b7 ${x.leads} lead${x.leads===1?'':'s'}${Number(x.value)?' \u00b7 '+money(x.value):''}</div>
+      </div>`).join('')
+      :'<div class="mi-sub">No sessions in this window yet. Once the site is repointed this fills in on its own.</div>'}
+    <div class="mi-sub" style="margin-top:10px">Sessions are attributed to the FIRST page of the visit, not the page
+      someone happened to convert on \u2014 the contact page never earned a lead, the page that brought them did.</div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px">
+    <h3>Where the traffic came from <span class="count">by channel</span></h3>
+    ${srcRows.length?srcRows.map(x=>`
+      <div class="bar-row">
+        <div class="bl" style="width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${x.source==='untagged'?'<span style="color:var(--muted)">untagged</span>':esc(x.source)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(x.sessions/maxSrc*100)}%;
+          ${x.source==='untagged'?'opacity:.45':''}"></div></div>
+        <div class="bv" style="width:150px">${x.sessions} sess \u00b7 ${x.leads} lead${x.leads===1?'':'s'}${Number(x.value)?' \u00b7 '+money(x.value):''}</div>
+      </div>`).join('')
+      :'<div class="mi-sub">Nothing tagged yet. Publish profile links with <code>?s=</code> and each channel separates out here.</div>'}
+    <div class="mi-sub" style="margin-top:10px">A visit counts against the channel on its ENTRY link, kept for the whole
+      session. <strong>Untagged</strong> is everything that arrived without one \u2014 direct, unlinked, or a profile
+      whose link still needs the tag; it is shown rather than hidden so you can see how much is unaccounted for.</div>
+  </div>
+
+  <div class="panel-grid">
+    <div class="panel">
+      <h3>Sites <span class="count">${(d.sites||[]).length}</span></h3>
+      ${(d.sites||[]).map(s=>`<div class="mini-item">
+        <div class="mi-top"><span><strong>${esc(s.name)}</strong></span>
+          ${s.wired?'<span class="badge b-green">wired to CRM</span>'
+                   :'<span class="badge b-gray">not wired</span>'}</div>
+        <div class="mi-sub">${esc((s.domain||'').replace(/^https?:\/\//,''))}
+          \u00b7 ${s.views||0} views \u00b7 ${s.leads||0} leads</div>
+        <div class="mi-sub">${s.last_run
+          ? 'audited '+ago(s.last_run.at)+' \u00b7 '+(s.last_run.pages||'?')+' pages'
+            +(s.last_run.score?' \u00b7 score '+s.last_run.score:'')
+          : 'never audited'}${s.open_findings?` \u00b7 <strong style="color:var(--amber)">${s.open_findings} open issue${s.open_findings===1?'':'s'}</strong>`:''}</div>
+      </div>`).join('')}
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Tracked keywords <span class="count">${(d.keywords||[]).length}</span>
+        <span class="mi-sub" style="font-weight:400"> \u00b7 ordered by intent price, not traffic</span></h3>
+      ${(d.keywords||[]).length?(d.keywords||[]).map(k=>{
+        const mine=d.my_reviews, weak=k.weakest_slot;
+        const gap=(weak!=null&&mine!=null)?weak-mine:null;
+        // Green once a slot is within reach of a month of asking; amber while
+        // it is a quarter's work; grey when it is not this year's problem.
+        const gapCls=gap==null?'b-gray':gap<=0?'b-green':gap<=25?'b-green':gap<=90?'b-amber':'b-gray';
+        return `<div class="mini-item">
+        <div class="mi-top"><span><strong>${esc(k.keyword)}</strong></span>
+          <span>
+            ${k.pack_position?`<span class="badge b-green">pack #${k.pack_position}</span> `:''}
+            <span class="badge ${k.position?(k.position<=3?'b-green':k.position<=10?'b-amber':'b-gray'):'b-gray'}">
+              ${k.position?('organic #'+k.position):'unranked'}</span></span></div>
+        <div class="mi-sub">
+          ${Number(k.intent_value)?'<strong>'+money(k.intent_value)+'/mo of intent</strong> \u00b7 ':''}
+          ${k.volume?k.volume.toLocaleString()+' searches':'volume unmeasured'}
+          ${Number(k.cpc)?' at '+money(k.cpc)+' a click':''}
+          \u00b7 ${esc(k.freq||'weekly')}</div>
+        ${weak!=null?`<div class="mi-sub" style="margin-top:5px">
+          Cheapest way into this pack: <strong>${weak}</strong> review${weak===1?'':'s'}
+          <span class="badge ${gapCls}">${gap<=0?'in range now':gap+' to go'}</span></div>`:''}
+        ${(k.pack||[]).length?`<div class="mi-sub" style="margin-top:4px;opacity:.85">
+          ${(k.pack||[]).map(p=>esc(p.name)+' '+(p.reviews==null?'?':p.reviews)).join(' \u00b7 ')}</div>`:''}
+        <div class="mi-sub" style="margin-top:4px">${k.target_url?'targets '+esc(k.target_url)+' \u00b7 ':''}${k.checked?'checked '+ago(k.checked):'<strong style="color:var(--amber)">never checked</strong>'}</div>
+      </div>`}).join('')
+      :'<div class="mi-sub">No keywords tracked yet.</div>'}
+      <div class="mi-sub" style="margin-top:12px">Intent price is monthly searches \u00d7 cost per click \u2014 what
+        advertisers actually pay to reach this search. The head term carries four times the traffic of
+        <em>roof repair phoenix</em> at a third of the value per visit, so ordering by traffic alone puts the
+        wrong keyword first.</div>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Open findings <span class="count">${(d.findings||[]).length}</span></h3>
+      ${(d.findings||[]).length?(d.findings||[]).map(x=>`<div class="mini-item">
+        <div class="mi-top"><span><strong>${esc(x.title)}</strong></span>
+          <span class="badge ${x.severity==='high'?'b-red':x.severity==='medium'?'b-amber':'b-gray'}">${esc(x.severity)}</span></div>
+        <div class="mi-sub">${esc(x.site)} \u00b7 ${esc(x.category)}${x.url?' \u00b7 '+esc(x.url.replace(/^https?:\/\/[^/]+/,'')):''}</div>
+        ${x.detail?`<div class="mi-sub" style="margin-top:4px">${esc(x.detail)}</div>`:''}
+      </div>`).join('')
+      :'<div class="empty" style="padding:24px"><div class="big">\u2713</div>Nothing open across any site.</div>'}
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>Data health</h3>
+      <div class="ck-row"><span class="ck-mark ${hlth.undialable_leads?'todo':'done'}">${hlth.undialable_leads?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.undialable_leads||0} lead${(hlth.undialable_leads||0)===1?'':'s'} with an undialable phone number</span></div>
+      <div class="ck-row"><span class="ck-mark ${hlth.leads_without_session?'todo':'done'}">${hlth.leads_without_session?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.leads_without_session||0} lead${(hlth.leads_without_session||0)===1?'':'s'} that cannot be traced to a page</span></div>
+      <div class="ck-row"><span class="ck-mark ${hlth.stale_rankings?'todo':'done'}">${hlth.stale_rankings?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.stale_rankings||0} tracked keyword${(hlth.stale_rankings||0)===1?'':'s'} not checked in 48 hours</span></div>
+      <div class="ck-row"><span class="ck-mark ${hlth.untagged_sessions?'todo':'done'}">${hlth.untagged_sessions?'!':'\u2713'}</span>
+        <span class="ck-label">${hlth.untagged_sessions||0} page view${(hlth.untagged_sessions||0)===1?'':'s'} with no channel tag</span></div>
+      <div class="ck-row"><span class="ck-mark done">\u2713</span>
+        <span class="ck-label">${hlth.intake_keys_live||0} intake key${(hlth.intake_keys_live||0)===1?'':'s'} live</span></div>
+    </div>
+  </div>`;
+}
+
+/* ============================ EXPORT ============================ */
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='ridgeline-backup-'+todayStr()+'.json';
+  a.click();
+}
+
+/* ============================ INIT ============================ */
+sb.auth.onAuthStateChange((event,session)=>{
+  if(session&&session.user){
+    currentUser=session.user;
+    if(!appLoaded){appLoaded=true;enterApp();}
+  }else{
+    currentUser=null;currentCompany=null;currentMembership=null;appLoaded=false;
+    state={contacts:[],deals:[],activities:[],reminders:[],calls:[],review_requests:[],roof_measurements:[],job_photos:[],settings:null,training:{progress:{},notes:''},members:[],invitations:[],notifications:[]};
+    const ob=document.getElementById('onboardScreen');if(ob)ob.style.display='none';
+    showAuth();
+  }
+});
+</script>
+</body>
+</html>
